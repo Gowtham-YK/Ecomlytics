@@ -1,0 +1,9 @@
+product_id,product_name,category,price,cost,views,units_sold,rating,returns
+P001,Urban Runner Shoes,Footwear,3499,1900,52400,941,3.2,38
+P002,Classic Hoodie,Apparel,2299,1100,20000,1440,4.5,24
+P003,Wireless Earbuds,Electronics,1999,950,38600,1180,4.1,51
+P004,Minimal Backpack,Accessories,1799,850,15800,620,4.6,12
+P005,Smart Watch,Electronics,4999,3100,27400,720,3.8,42
+P006,Everyday T-Shirt,Apparel,799,360,31200,2650,4.4,35
+P007,Home Desk Lamp,Home,1499,650,9200,390,4.2,8
+P008,Travel Bottle,Home,699,280,11600,810,4.7,9

@@ -1,0 +1,20 @@
+Ecomlytics_Project/
+├── frontend/
+│   ├── index.html
+│   ├── pages/
+│   │   ├── sales.html
+│   │   ├── products.html
+│   │   ├── customers.html
+│   │   ├── retention.html
+│   │   └── insights.html
+│   ├── css/style.css
+│   └── js/app.js
+├── backend/main.py
+├── analytics/metrics.py
+├── insights/engine.py
+├── data/{products,customers,orders}.csv
+├── database/schema.sql
+├── tests/test_metrics.py
+├── requirements.txt
+├── README.md
+└── .gitignore

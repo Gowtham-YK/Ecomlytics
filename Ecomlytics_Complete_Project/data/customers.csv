@@ -1,0 +1,11 @@
+customer_id,customer_name,city,orders,total_spend,last_order_days,segment
+C001,Aarav,Bengaluru,8,28500,12,Champions
+C002,Diya,Mumbai,6,21400,18,Loyal
+C003,Rohan,Delhi,2,4200,74,At Risk
+C004,Ananya,Chennai,5,16300,9,Loyal
+C005,Vikram,Pune,1,899,121,Lost
+C006,Meera,Bengaluru,9,31800,5,Champions
+C007,Kabir,Hyderabad,3,7600,39,Potential Loyalist
+C008,Isha,Kolkata,4,11200,22,Potential Loyalist
+C009,Neel,Jaipur,1,1499,92,At Risk
+C010,Sara,Ahmedabad,7,24600,15,Champions
