@@ -18,7 +18,15 @@ GA4_PROPERTY_ID = os.environ.get("GA4_PROPERTY_ID", "")
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
+
 
 def google_analytics_configured() -> bool:
     """True only if real GA4 OAuth credentials are present."""
     return bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI)
+
+
+def razorpay_configured() -> bool:
+    """True only if real Razorpay credentials are present."""
+    return bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)

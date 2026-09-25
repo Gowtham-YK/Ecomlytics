@@ -857,8 +857,19 @@ async function subscriptionPage(){
 
  shell("subscription");
 
- const res=await api("/subscription/plans");
- const plans=res.plans;
+ // Fetch plans and Razorpay config in parallel
+ const [res, rzpCfg] = await Promise.all([
+  api("/subscription/plans"),
+  api("/subscription/razorpay/config"),
+ ]);
+ const plans = res.plans;
+
+ // Determine badge text based on gateway mode
+ const gatewayBadge = rzpCfg.mode === "live"
+  ? `<span class="pill good" title="Razorpay Live">Razorpay Live</span>`
+  : rzpCfg.mode === "test"
+  ? `<span class="pill" title="Razorpay Test Mode">Razorpay Test</span>`
+  : `<span class="pill" title="Razorpay Demo / Pitch Mode">Razorpay Demo</span>`;
 
  document.getElementById("content").innerHTML=
  header("Plans & Billing","Start with basic analysis and upgrade when your business needs deeper decision intelligence.")+
@@ -869,12 +880,12 @@ async function subscriptionPage(){
    <h2>${hasAdvancedAccess()?`You're on the ${planMeta().name} plan.`:"You're currently on the Free plan."}</h2>
    <p>${hasAdvancedAccess()?"Advanced analytics are enabled for this workspace.":"Basic analysis remains available at no cost. Upgrade when you need advanced insights, recommendations and decision intelligence."}</p>
   </div>
-  <div class="billing-status"><span class="status-dot"></span>${hasAdvancedAccess()?"Advanced access enabled":"Basic access"}</div>
+  <div class="billing-status"><span class="status-dot"></span>${hasAdvancedAccess()?"Advanced access enabled":"Basic access"} ${gatewayBadge}</div>
  </div>
 
  <div class="card" style="margin-top:18px">
   <div class="section-title">Choose your level</div>
-  <p class="note">The subscription structure follows the Ecomlytics product plan: Free ₹0, Starter ₹999/month, Growth ₹2,999/month and Pro ₹7,999/month.</p>
+  <p class="note">The subscription structure follows the Ecomlytics product plan: Free ₹0, Starter ₹999/month, Growth ₹2,999/month and Pro ₹7,999/month. Payments powered by <b>Razorpay</b>.</p>
  </div>
 
  <div class="pricing-grid" style="margin-top:18px">
@@ -892,7 +903,10 @@ async function subscriptionPage(){
       ? `<button class="btn secondary-btn" disabled>Basic analysis</button>`
       : p.id===currentPlan()
       ? `<button class="btn secondary-btn" disabled>Active plan</button>`
-      : `<button class="btn" onclick="openPayment('${p.id}')">Upgrade to ${p.name}</button>`}
+      : `<button class="btn rzp-pay-btn" onclick="openRazorpayCheckout('${p.id}','${p.name}',${p.price})">
+          <img src="https://razorpay.com/favicon.ico" width="14" height="14" style="vertical-align:middle;margin-right:6px;border-radius:2px" onerror="this.style.display='none'">
+          Pay ₹${fmt(p.price)} via Razorpay
+         </button>`}
    </div>
   `).join("")}
  </div>
@@ -908,26 +922,38 @@ async function subscriptionPage(){
  </div>
 
  <div class="card" style="margin-top:18px">
-  <div class="section-title">Payment history</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+   <div class="section-title" style="margin-bottom:0">Live payment demo — 35 dummy transactions</div>
+   <button class="btn secondary-btn" id="loadDummyBtn" onclick="loadDummyPayments()" style="font-size:12px">↻ Load dummy payments</button>
+  </div>
+  <p class="note" style="margin-top:6px">35 pre-generated Razorpay-style payments (Starter ₹999 · Growth ₹2,999 · Pro ₹7,999) to demonstrate how the transaction log looks. Each also triggers a GA4 <code>purchase</code> event.</p>
+  <div id="dummyPaymentsSummary" style="display:none;margin-top:14px"></div>
+  <div id="dummyPaymentsTable" style="margin-top:12px"><div class="empty">Click "Load dummy payments" to generate and display 35 sample Razorpay transactions.</div></div>
+ </div>
+
+ <div class="card" style="margin-top:18px">
+  <div class="section-title">Your payment history</div>
   <div id="paymentHistory" class="payment-history"></div>
  </div>
 
  <div id="paymentModal" class="modal-backdrop" style="display:none">
   <div class="payment-modal">
    <button class="modal-close" onclick="closePayment()">×</button>
-   <div class="eyebrow">Demo checkout</div>
+   <div class="eyebrow" id="rzpModalBadge">Razorpay Checkout</div>
    <h2 id="paymentTitle">Upgrade</h2>
-   <p class="note">Duplicate/demo payment flow for the project. It does not charge real money or connect to a payment gateway.</p>
+   <p class="note" id="paymentSubtitle">Secure payment powered by Razorpay.</p>
+   <div id="rzpLoading" style="text-align:center;padding:32px 0;display:none">
+    <div style="font-size:28px">⏳</div><p class="note">Opening Razorpay Checkout…</p>
+   </div>
    <form id="paymentForm">
     <input type="hidden" id="payPlan">
-    <div class="field"><label>Cardholder name</label><input id="cardName" class="input" placeholder="Alex Johnson" required></div>
-    <div class="field"><label>Card number</label><input id="cardNumber" class="input" inputmode="numeric" maxlength="19" placeholder="4242 4242 4242 4242" required></div>
-    <div class="grid two">
-     <div class="field"><label>Expiry</label><input id="cardExpiry" class="input" placeholder="12/29" required></div>
-     <div class="field"><label>CVV</label><input id="cardCvv" class="input" maxlength="4" placeholder="123" required></div>
-    </div>
+    <div class="field"><label>Your name</label><input id="cardName" class="input" placeholder="Alex Johnson" required></div>
+    <div class="field"><label>Email</label><input id="cardEmail" class="input" type="email" placeholder="you@company.com" required></div>
     <div id="paymentError" class="error"></div>
-    <button class="btn login-btn" type="submit">Pay & activate plan</button>
+    <button class="btn login-btn" id="rzpPayBtn" type="submit">
+     <img src="https://razorpay.com/favicon.ico" width="14" height="14" style="vertical-align:middle;margin-right:6px;border-radius:2px" onerror="this.style.display='none'">
+     Pay via Razorpay
+    </button>
    </form>
    <div id="paymentSuccess" class="payment-success" style="display:none"></div>
   </div>
@@ -935,46 +961,253 @@ async function subscriptionPage(){
  `;
 
  renderPaymentHistory();
- document.getElementById("paymentForm").addEventListener("submit",processPayment);
+ document.getElementById("paymentForm").addEventListener("submit", processRazorpayPayment);
 }
 
-function openPayment(plan){
- const p=PLAN_META[plan];
- if(!p || !p.price) return;
- document.getElementById("payPlan").value=plan;
- document.getElementById("paymentTitle").textContent=`Upgrade to ${p.name} · ₹${fmt(p.price)}/month`;
- document.getElementById("paymentError").style.display="none";
- document.getElementById("paymentForm").style.display="block";
- document.getElementById("paymentSuccess").style.display="none";
- document.getElementById("paymentModal").style.display="flex";
+function openRazorpayCheckout(planId, planName, planPrice){
+ document.getElementById("payPlan").value = planId;
+ document.getElementById("paymentTitle").textContent = `Upgrade to ${planName}`;
+ document.getElementById("paymentSubtitle").textContent = `₹${fmt(planPrice)}/month · Secure payment via Razorpay`;
+ document.getElementById("paymentError").style.display = "none";
+ document.getElementById("paymentForm").style.display = "block";
+ document.getElementById("paymentSuccess").style.display = "none";
+ document.getElementById("rzpLoading").style.display = "none";
+ document.getElementById("paymentModal").style.display = "flex";
+
+ // Fire GA4 begin_checkout event
+ if(typeof gtag === "function"){
+  gtag("event", "begin_checkout", {
+   currency: "INR",
+   value: planPrice,
+   items: [{ item_id: planId, item_name: planName, price: planPrice }]
+  });
+ }
 }
+
+// Alias for legacy onclick
+function openPayment(planId){ const p=PLAN_META[planId]; if(p) openRazorpayCheckout(planId, p.name, p.price); }
+
 function closePayment(){ const m=document.getElementById("paymentModal"); if(m)m.style.display="none"; }
 
-async function processPayment(e){
+async function processRazorpayPayment(e){
  e.preventDefault();
- const plan=document.getElementById("payPlan").value;
- const err=document.getElementById("paymentError");
- const card=document.getElementById("cardNumber").value.replace(/\s/g,"");
- if(card.length<12){err.textContent="Enter a valid demo card number.";err.style.display="block";return;}
+ const plan = document.getElementById("payPlan").value;
+ const name = document.getElementById("cardName").value.trim();
+ const email = document.getElementById("cardEmail").value.trim();
+ const err = document.getElementById("paymentError");
+
+ if(!name || !email){ err.textContent="Please enter your name and email."; err.style.display="block"; return; }
+
+ document.getElementById("paymentForm").style.display = "none";
+ document.getElementById("rzpLoading").style.display = "block";
+
  try{
-  const r=await fetch(API+"/subscription/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan,card_last4:card.slice(-4)})});
-  const data=await r.json();
-  if(!r.ok) throw new Error(data.detail||"Payment failed");
-  localStorage.setItem("ecomlytics_plan",plan);
-  const history=JSON.parse(localStorage.getItem("ecomlytics_payments")||"[]");
-  history.unshift({transaction_id:data.transaction_id,plan:data.plan.name,amount:data.plan.price,date:new Date().toISOString(),mode:"Demo"});
-  localStorage.setItem("ecomlytics_payments",JSON.stringify(history.slice(0,10)));
-  document.getElementById("paymentForm").style.display="none";
-  document.getElementById("paymentSuccess").style.display="block";
-  document.getElementById("paymentSuccess").innerHTML=`<div class="success-icon">✓</div><h3>Payment approved</h3><p>${data.message}</p><p class="note">Transaction: <b>${data.transaction_id}</b></p><button class="btn" onclick="window.location.reload()">Continue to Ecomlytics</button>`;
- }catch(ex){err.textContent=ex.message||"Could not complete the demo payment.";err.style.display="block";}
+  // Step 1: Create Razorpay order via backend
+  const orderRes = await fetch(API+"/subscription/razorpay/create-order", {
+   method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({plan})
+  });
+  const orderData = await orderRes.json();
+  if(!orderRes.ok) throw new Error(orderData.detail || "Could not create order.");
+
+  // Step 2: Launch Razorpay checkout (real or demo)
+  if(orderData.mode === "demo"){
+   // High-fidelity demo: simulate Razorpay response without SDK
+   await simulateDemoRazorpayCheckout(plan, name, email, orderData);
+  } else {
+   // Real Razorpay SDK checkout
+   await launchRazorpaySdk(plan, name, email, orderData);
+  }
+ }catch(ex){
+  document.getElementById("rzpLoading").style.display = "none";
+  document.getElementById("paymentForm").style.display = "block";
+  err.textContent = ex.message || "Payment could not be completed.";
+  err.style.display = "block";
+ }
+}
+
+async function simulateDemoRazorpayCheckout(plan, name, email, orderData){
+ // Simulate a 1.5s "Razorpay processing" delay for realism
+ await new Promise(r => setTimeout(r, 1500));
+
+ const fakePaymentId = "pay_demo_" + Math.random().toString(36).slice(2,10);
+ const fakeSignature = "sig_demo_" + Math.random().toString(36).slice(2,18);
+
+ // Step 3: Verify via backend
+ const verifyRes = await fetch(API+"/subscription/razorpay/verify", {
+  method:"POST", headers:{"Content-Type":"application/json"},
+  body: JSON.stringify({
+   razorpay_order_id: orderData.order_id,
+   razorpay_payment_id: fakePaymentId,
+   razorpay_signature: fakeSignature,
+   plan,
+  })
+ });
+ const verifyData = await verifyRes.json();
+ if(!verifyRes.ok) throw new Error(verifyData.detail || "Verification failed.");
+
+ onPaymentSuccess(verifyData, plan, name, orderData.amount);
+}
+
+async function launchRazorpaySdk(plan, name, email, orderData){
+ // Load Razorpay JS SDK dynamically
+ if(!window.Razorpay){
+  await new Promise((resolve, reject) => {
+   const s = document.createElement("script");
+   s.src = "https://checkout.razorpay.com/v1/checkout.js";
+   s.onload = resolve; s.onerror = () => reject(new Error("Could not load Razorpay SDK."));
+   document.head.appendChild(s);
+  });
+ }
+
+ const rzp = new window.Razorpay({
+  key: orderData.key_id,
+  amount: orderData.amount_paise,
+  currency: "INR",
+  name: "Ecomlytics",
+  description: `${orderData.plan.name} Plan - ₹${fmt(orderData.amount)}/month`,
+  order_id: orderData.order_id,
+  prefill: { name, email },
+  theme: { color: "#1b1f3a" },
+  handler: async function(response){
+   const verifyRes = await fetch(API+"/subscription/razorpay/verify", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({
+     razorpay_order_id: response.razorpay_order_id,
+     razorpay_payment_id: response.razorpay_payment_id,
+     razorpay_signature: response.razorpay_signature,
+     plan,
+    })
+   });
+   const verifyData = await verifyRes.json();
+   if(!verifyRes.ok) throw new Error(verifyData.detail || "Verification failed.");
+   onPaymentSuccess(verifyData, plan, name, orderData.amount);
+  },
+  modal: { ondismiss: function(){ document.getElementById("rzpLoading").style.display="none"; document.getElementById("paymentForm").style.display="block"; } }
+ });
+ rzp.open();
+}
+
+function onPaymentSuccess(verifyData, plan, customerName, amount){
+ localStorage.setItem("ecomlytics_plan", plan);
+ const history = JSON.parse(localStorage.getItem("ecomlytics_payments")||"[]");
+ history.unshift({
+  transaction_id: verifyData.transaction_id,
+  plan: verifyData.plan.name,
+  amount: verifyData.plan.price || amount,
+  date: new Date().toISOString(),
+  mode: verifyData.mode === "live" ? "Live" : verifyData.mode === "test" ? "Test" : "Demo",
+  gateway: "Razorpay",
+ });
+ localStorage.setItem("ecomlytics_payments", JSON.stringify(history.slice(0,50)));
+
+ // Fire GA4 purchase event
+ if(typeof gtag === "function"){
+  gtag("event", "purchase", {
+   transaction_id: verifyData.transaction_id,
+   value: verifyData.plan.price || amount,
+   currency: "INR",
+   items: [{ item_id: plan, item_name: verifyData.plan.name, price: verifyData.plan.price || amount }]
+  });
+ }
+
+ document.getElementById("rzpLoading").style.display = "none";
+ document.getElementById("paymentSuccess").style.display = "block";
+ document.getElementById("paymentSuccess").innerHTML = `
+  <div class="success-icon">✓</div>
+  <h3>Payment successful!</h3>
+  <p>${verifyData.message}</p>
+  <p class="note">Transaction: <b>${verifyData.transaction_id}</b></p>
+  <p class="note">Plan: <b>${verifyData.plan.name}</b> · Gateway: <b>Razorpay</b></p>
+  <button class="btn" onclick="window.location.reload()">Continue to Ecomlytics</button>
+ `;
+}
+
+async function loadDummyPayments(){
+ const btn = document.getElementById("loadDummyBtn");
+ const tableEl = document.getElementById("dummyPaymentsTable");
+ const summaryEl = document.getElementById("dummyPaymentsSummary");
+ if(btn) btn.disabled = true;
+ if(tableEl) tableEl.innerHTML = '<div class="empty">Generating 35 dummy Razorpay payments…</div>';
+
+ try{
+  const res = await fetch(API+"/subscription/dummy-payments?count=35");
+  const data = await res.json();
+  const payments = data.payments;
+  const s = data.summary;
+
+  // Fire all 35 as GA4 purchase events
+  if(typeof gtag === "function"){
+   payments.forEach(p => {
+    gtag("event", "purchase", {
+     transaction_id: p.transaction_id,
+     value: p.amount,
+     currency: "INR",
+     items: [{ item_id: p.plan_id, item_name: p.plan_name, price: p.amount }]
+    });
+   });
+  }
+
+  // Render summary cards
+  if(summaryEl){
+   summaryEl.style.display = "block";
+   summaryEl.innerHTML = `
+    <div class="grid four" style="margin-bottom:12px">
+     <div class="metric-card" style="background:var(--bg-card)">
+      <div class="metric-label">Total Transactions</div>
+      <div class="metric-value">${s.total_count}</div>
+     </div>
+     <div class="metric-card" style="background:var(--bg-card)">
+      <div class="metric-label">Total Revenue</div>
+      <div class="metric-value">${money(s.total_revenue)}</div>
+     </div>
+     <div class="metric-card" style="background:var(--bg-card)">
+      <div class="metric-label">Starter (₹999)</div>
+      <div class="metric-value">${s.starter_count}</div>
+     </div>
+     <div class="metric-card" style="background:var(--bg-card)">
+      <div class="metric-label">Growth + Pro</div>
+      <div class="metric-value">${s.growth_count + s.pro_count}</div>
+     </div>
+    </div>
+    <p class="note" style="margin-bottom:4px">✓ <b>${payments.length} GA4 <code>purchase</code> events fired</b> — check your Google Analytics Realtime → Events tab.</p>
+   `;
+  }
+
+  // Render table
+  if(tableEl){
+   tableEl.innerHTML = `
+    <div class="table-wrap">
+     <table class="table">
+      <thead><tr>
+       <th>#</th><th>Transaction ID</th><th>Customer</th><th>Plan</th><th>Amount</th><th>Method</th><th>Date</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+       ${payments.map((p,i)=>`<tr>
+        <td>${i+1}</td>
+        <td><b>${p.transaction_id}</b></td>
+        <td><span style="font-size:12px">${p.customer_name}<br><span class="note">${p.customer_email}</span></span></td>
+        <td>${p.plan_name}</td>
+        <td><b>${money(p.amount)}</b></td>
+        <td style="font-size:11px">${p.payment_method}</td>
+        <td style="font-size:11px">${new Date(p.date).toLocaleString("en-IN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td>
+        <td><span class="pill good">captured</span></td>
+       </tr>`).join("")}
+      </tbody>
+     </table>
+    </div>
+   `;
+  }
+ }catch(ex){
+  if(tableEl) tableEl.innerHTML = `<div class="error" style="display:block">Failed to load dummy payments: ${ex.message}</div>`;
+ }
+ if(btn){ btn.disabled = false; btn.textContent = "↻ Reload"; }
 }
 
 function renderPaymentHistory(){
  const el=document.getElementById("paymentHistory"); if(!el)return;
  const history=JSON.parse(localStorage.getItem("ecomlytics_payments")||"[]");
- if(!history.length){el.innerHTML='<div class="empty">No payments yet. Your demo transactions will appear here.</div>';return;}
- el.innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Transaction</th><th>Plan</th><th>Amount</th><th>Date</th><th>Mode</th></tr></thead><tbody>${history.map(x=>`<tr><td><b>${x.transaction_id}</b></td><td>${x.plan}</td><td>${money(x.amount)}</td><td>${new Date(x.date).toLocaleString()}</td><td><span class="pill">Demo</span></td></tr>`).join("")}</tbody></table></div>`;
+ if(!history.length){el.innerHTML='<div class="empty">No payments yet. Complete a payment above — it will appear here.</div>';return;}
+ el.innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Transaction</th><th>Plan</th><th>Amount</th><th>Gateway</th><th>Date</th><th>Mode</th></tr></thead><tbody>${history.map(x=>`<tr><td><b>${x.transaction_id}</b></td><td>${x.plan}</td><td>${money(x.amount)}</td><td>${x.gateway||"—"}</td><td>${new Date(x.date).toLocaleString()}</td><td><span class="pill">${x.mode}</span></td></tr>`).join("")}</tbody></table></div>`;
 }
 
 async function dataSourcesPage(){

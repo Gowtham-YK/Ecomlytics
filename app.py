@@ -15,7 +15,8 @@ from analytics.metrics import (
 from insights.engine import generate_insights
 
 from integrations.data_sources import list_data_sources
-from integrations import google_analytics
+from integrations import google_analytics, razorpay_client
+import config
 import secrets
 from fastapi import HTTPException, Request
 
@@ -304,6 +305,73 @@ async def demo_checkout(request: Request):
         "transaction_id": transaction_id,
         "plan": plans[plan],
         "message": "Demo payment approved. No real money was charged.",
+    }
+
+
+@app.get("/api/subscription/razorpay/config")
+def razorpay_config():
+    return {
+        "configured": razorpay_client.is_configured(),
+        "key_id": config.RAZORPAY_KEY_ID or "rzp_test_demo",
+        "mode": "live" if "live" in config.RAZORPAY_KEY_ID.lower() else ("test" if razorpay_client.is_configured() else "demo"),
+    }
+
+
+@app.post("/api/subscription/razorpay/create-order")
+async def create_razorpay_order(request: Request):
+    payload = await request.json()
+    plan_id = str(payload.get("plan", "")).lower()
+    try:
+        order = razorpay_client.create_order(plan_id)
+        return order
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to create Razorpay order: {str(exc)}")
+
+
+@app.post("/api/subscription/razorpay/verify")
+async def verify_razorpay_payment(request: Request):
+    payload = await request.json()
+    order_id = payload.get("razorpay_order_id", "")
+    payment_id = payload.get("razorpay_payment_id", "")
+    signature = payload.get("razorpay_signature", "")
+    plan_id = str(payload.get("plan", "")).lower()
+
+    if not payment_id:
+        payment_id = "pay_rzp_" + secrets.token_hex(6)
+
+    is_valid = razorpay_client.verify_payment(order_id, payment_id, signature)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="Razorpay payment verification failed.")
+
+    plans = {p["id"]: p for p in subscription_plans()["plans"]}
+    plan_info = plans.get(plan_id, {"id": plan_id, "name": plan_id.title(), "price": 0})
+
+    return {
+        "success": True,
+        "transaction_id": payment_id,
+        "order_id": order_id,
+        "plan": plan_info,
+        "message": f"Payment of INR {plan_info.get('price', 0):,} verified successfully via Razorpay.",
+        "mode": "live" if razorpay_client.is_configured() else "demo",
+    }
+
+
+@app.get("/api/subscription/dummy-payments")
+def get_dummy_payments(count: int = 35):
+    payments = razorpay_client.generate_dummy_payments(total_count=count)
+    summary = {
+        "total_count": len(payments),
+        "total_revenue": sum(p["amount"] for p in payments),
+        "starter_count": sum(1 for p in payments if p["amount"] == 999),
+        "growth_count": sum(1 for p in payments if p["amount"] == 2999),
+        "pro_count": sum(1 for p in payments if p["amount"] == 7999),
+    }
+    return {
+        "success": True,
+        "summary": summary,
+        "payments": payments,
     }
 
 
