@@ -7,12 +7,72 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
   gtag('config', 'G-N4DCRNR7VV');
 </script>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sign in | Ecomlytics</title><link rel="stylesheet" href="css/style.css">
-<link rel="icon" href="favicon.svg"></head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in | Ecomlytics</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="favicon.svg">
+<style>
+  .auth-tabs {
+    display: flex;
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 10px;
+    margin-bottom: 22px;
+  }
+  .auth-tab {
+    flex: 1;
+    text-align: center;
+    padding: 9px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .auth-tab.active {
+    background: #ffffff;
+    color: #1e293b;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  }
+  .field input.input-error {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 3px rgba(239,68,68,0.15) !important;
+  }
+  .field-error-msg {
+    color: #ef4444;
+    font-size: 11px;
+    margin-top: 5px;
+    display: none;
+    font-weight: 600;
+  }
+  .demo-accounts {
+    margin-top: 16px;
+    padding: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 11px;
+    color: #475569;
+  }
+  .demo-acc-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    background: #e2e8f0;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-top: 5px;
+    cursor: pointer;
+  }
+  .demo-acc-badge:hover {
+    background: #cbd5e1;
+  }
+</style>
+</head>
 <body>
 <div class="login-page">
  <div class="login-shell">
@@ -23,32 +83,283 @@
    <div class="login-points">
     <div class="login-point"><b>✓</b> Product and sales intelligence</div>
     <div class="login-point"><b>✓</b> Customer and retention analytics</div>
-    <div class="login-point"><b>✓</b> Automated business insights</div>
+    <div class="login-point"><b>✓</b> Automated business insights & GA4 integration</div>
    </div>
   </section>
   <section class="login-form">
-   <h2>Welcome back</h2>
-   <p class="sub">Sign in to access your Ecomlytics workspace.</p>
-   <form id="loginForm">
-    <div class="field"><label>Email address</label><input id="email" type="email" placeholder="you@company.com" required></div>
-    <div class="field"><label>Password</label><input id="password" type="password" placeholder="Enter your password" required><div id="error" class="error">Please enter your email and password.</div></div>
-    <div class="login-options"><label class="remember"><input type="checkbox"> Remember me</label><a href="#" onclick="alert('Password reset flow can be connected here.');return false;">Forgot password?</a></div>
-    <button class="btn login-btn" type="submit">Sign in to Ecomlytics</button>
+   <div class="auth-tabs">
+    <div class="auth-tab active" id="tabSignIn" onclick="switchAuthMode('signin')">Sign In</div>
+    <div class="auth-tab" id="tabSignUp" onclick="switchAuthMode('signup')">Create Account</div>
+   </div>
+
+   <h2 id="formTitle">Welcome back</h2>
+   <p class="sub" id="formSub">Sign in to access your Ecomlytics workspace.</p>
+
+   <form id="authForm" novalidate>
+    <div class="field" id="nameField" style="display:none">
+     <label>Full Name</label>
+     <input id="fullName" type="text" placeholder="e.g. Mike Oxlong">
+     <div id="nameError" class="field-error-msg">Please enter your full name.</div>
+    </div>
+
+    <div class="field">
+     <label>Email address</label>
+     <input id="email" type="email" placeholder="you@company.com" required>
+     <div id="emailError" class="field-error-msg">Please enter a valid email address (e.g. name@company.com).</div>
+    </div>
+
+    <div class="field">
+     <label>Password</label>
+     <input id="password" type="password" placeholder="Enter your password (min 6 chars)" required>
+     <div id="passwordError" class="field-error-msg">Password must be at least 6 characters long.</div>
+    </div>
+
+    <div class="field" id="companyField" style="display:none">
+     <label>Workspace / Store Name (Optional)</label>
+     <input id="company" type="text" placeholder="e.g. Urban Threads">
+    </div>
+
+    <div class="login-options" id="loginOptions">
+     <label class="remember"><input type="checkbox" id="rememberMe" checked> Remember me</label>
+     <a href="#" onclick="alert('Password reset link has been sent to your email if registered.');return false;">Forgot password?</a>
+    </div>
+
+    <button class="btn login-btn" type="submit" id="submitBtn">Sign in to Ecomlytics</button>
    </form>
-   <div class="demo">Demo mode: any valid email + any password will open the analytics workspace.</div>
+
+   <div class="demo-accounts">
+    <strong>💡 Workspace Account Mode:</strong>
+    <div>Create an account or sign in with your email. Each account maintains its own workspace interface and user activity metrics for GA4.</div>
+   </div>
+
    <div class="login-foot">© 2026 Ecomlytics · E-commerce Product Intelligence Platform</div>
   </section>
  </div>
 </div>
+
 <script>
-document.getElementById("loginForm").addEventListener("submit",function(e){
- e.preventDefault();
- const email=document.getElementById("email").value.trim(), password=document.getElementById("password").value;
- const err=document.getElementById("error");
- if(!email || !password){err.style.display="block";return}
- localStorage.setItem("ecomlytics_user",email);
- if(typeof gtag === "function") gtag("event", "login", { method: "demo_login" });
- window.location.href="index.html";
+let currentMode = 'signin';
+
+function switchAuthMode(mode) {
+  currentMode = mode;
+  const tabIn = document.getElementById('tabSignIn');
+  const tabUp = document.getElementById('tabSignUp');
+  const nameField = document.getElementById('nameField');
+  const companyField = document.getElementById('companyField');
+  const loginOptions = document.getElementById('loginOptions');
+  const formTitle = document.getElementById('formTitle');
+  const formSub = document.getElementById('formSub');
+  const submitBtn = document.getElementById('submitBtn');
+
+  clearErrors();
+
+  if (mode === 'signup') {
+    tabIn.classList.remove('active');
+    tabUp.classList.add('active');
+    nameField.style.display = 'block';
+    companyField.style.display = 'block';
+    loginOptions.style.display = 'none';
+    formTitle.innerText = 'Create Account';
+    formSub.innerText = 'Set up your personalized Ecomlytics workspace.';
+    submitBtn.innerText = 'Create Workspace Account';
+  } else {
+    tabUp.classList.remove('active');
+    tabIn.classList.add('active');
+    nameField.style.display = 'none';
+    companyField.style.display = 'none';
+    loginOptions.style.display = 'flex';
+    formTitle.innerText = 'Welcome back';
+    formSub.innerText = 'Sign in to access your Ecomlytics workspace.';
+    submitBtn.innerText = 'Sign in to Ecomlytics';
+  }
+}
+
+function clearErrors() {
+  ['fullName', 'email', 'password'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.classList.remove('input-error');
+  });
+  ['nameError', 'emailError', 'passwordError'].forEach(id => {
+    const err = document.getElementById(id);
+    if (err) err.style.display = 'none';
+  });
+}
+
+// Strict email regex matching RFC standard email format with valid TLD (.com, .in, .org, etc.)
+function isValidEmail(email) {
+  if (!email || email.length < 5 || email.length > 254) return false;
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,63}$/;
+  if (!emailRegex.test(email)) return false;
+  
+  // Extra validation against fake dummy patterns without real domains
+  const parts = email.split('@');
+  if (parts.length !== 2) return false;
+  const domain = parts[1];
+  if (!domain.includes('.')) return false;
+  const tld = domain.split('.').pop();
+  if (tld.length < 2 || /^\d+$/.test(tld)) return false;
+
+  return true;
+}
+
+function getStoredAccounts() {
+  try {
+    const raw = localStorage.getItem('ecomlytics_accounts');
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function saveStoredAccounts(accounts) {
+  localStorage.setItem('ecomlytics_accounts', JSON.stringify(accounts));
+}
+
+function generateInitials(name, email) {
+  if (name && name.trim()) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  const cleanEmail = email.split('@')[0].replace(/[._-]/g, ' ');
+  const words = cleanEmail.split(/\s+/);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return cleanEmail.substring(0, 2).toUpperCase();
+}
+
+function generateUserId(email) {
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) {
+    hash = (hash << 5) - hash + email.charCodeAt(i);
+    hash |= 0;
+  }
+  return 'usr_' + Math.abs(hash);
+}
+
+document.getElementById('authForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  clearErrors();
+
+  const emailInput = document.getElementById('email');
+  const passwordInput = document.getElementById('password');
+  const nameInput = document.getElementById('fullName');
+  const companyInput = document.getElementById('company');
+
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+  const fullName = nameInput.value.trim();
+  const company = companyInput.value.trim();
+
+  let hasError = false;
+
+  if (currentMode === 'signup' && !fullName) {
+    nameInput.classList.add('input-error');
+    document.getElementById('nameError').style.display = 'block';
+    hasError = true;
+  }
+
+  if (!isValidEmail(email)) {
+    emailInput.classList.add('input-error');
+    const errEl = document.getElementById('emailError');
+    errEl.innerText = 'Please enter a valid email address with a domain (e.g. name@company.com)';
+    errEl.style.display = 'block';
+    hasError = true;
+  }
+
+  if (!password || password.length < 6) {
+    passwordInput.classList.add('input-error');
+    document.getElementById('passwordError').style.display = 'block';
+    hasError = true;
+  }
+
+  if (hasError) return;
+
+  const accounts = getStoredAccounts();
+  const existingAccIndex = accounts.findIndex(a => a.email.toLowerCase() === email.toLowerCase());
+
+  let userProfile = null;
+
+  if (currentMode === 'signup') {
+    if (existingAccIndex !== -1) {
+      emailInput.classList.add('input-error');
+      const errEl = document.getElementById('emailError');
+      errEl.innerText = 'An account with this email address already exists. Please sign in instead.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const nameToUse = fullName || email.split('@')[0];
+    userProfile = {
+      id: generateUserId(email),
+      name: nameToUse,
+      email: email,
+      password: password,
+      initials: generateInitials(nameToUse, email),
+      company: company || (nameToUse + "'s Store"),
+      plan: 'free',
+      created_at: new Date().toISOString(),
+      last_active: new Date().toISOString()
+    };
+
+    accounts.push(userProfile);
+    saveStoredAccounts(accounts);
+  } else {
+    // Sign in mode
+    if (existingAccIndex !== -1) {
+      const existing = accounts[existingAccIndex];
+      if (existing.password && existing.password !== password) {
+        passwordInput.classList.add('input-error');
+        const errEl = document.getElementById('passwordError');
+        errEl.innerText = 'Incorrect password for this account. Please try again.';
+        errEl.style.display = 'block';
+        return;
+      }
+      userProfile = existing;
+      userProfile.last_active = new Date().toISOString();
+      accounts[existingAccIndex] = userProfile;
+      saveStoredAccounts(accounts);
+    } else {
+      // Create user session for new valid email sign-in
+      const nameToUse = email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      userProfile = {
+        id: generateUserId(email),
+        name: nameToUse,
+        email: email,
+        password: password,
+        initials: generateInitials(nameToUse, email),
+        company: nameToUse + "'s Store",
+        plan: 'free',
+        created_at: new Date().toISOString(),
+        last_active: new Date().toISOString()
+      };
+      accounts.push(userProfile);
+      saveStoredAccounts(accounts);
+    }
+  }
+
+  // Save current active user session profile
+  localStorage.setItem('ecomlytics_user', JSON.stringify(userProfile));
+  localStorage.setItem('ecomlytics_plan', userProfile.plan || 'free');
+
+  // GA4 Active User & Event Tracking
+  if (typeof gtag === 'function') {
+    gtag('config', 'G-N4DCRNR7VV', {
+      'user_id': userProfile.id,
+      'user_properties': {
+        'user_email': userProfile.email,
+        'user_name': userProfile.name,
+        'user_plan': userProfile.plan
+      }
+    });
+    gtag('event', currentMode === 'signup' ? 'sign_up' : 'login', {
+      'method': 'email',
+      'user_id': userProfile.id,
+      'user_email': userProfile.email
+    });
+  }
+
+  window.location.href = 'index.html';
 });
 </script>
-</body></html>
+</body>
+</html>

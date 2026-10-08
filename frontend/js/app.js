@@ -1,7 +1,53 @@
 const API = "/api";
 
+function getUserSession(){
+ const raw = localStorage.getItem("ecomlytics_user");
+ if(!raw) return null;
+ try {
+  if(raw.startsWith("{")){
+   return JSON.parse(raw);
+  }
+  const email = raw;
+  const name = email.split("@")[0].replace(/[._-]/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+  const initials = name.split(/\s+/).map(w=>w[0]).join("").substring(0,2).toUpperCase() || "US";
+  return {
+   id: "usr_" + Math.abs(hashCode(email)),
+   email: email,
+   name: name,
+   initials: initials,
+   company: name + "'s Store",
+   plan: localStorage.getItem("ecomlytics_plan") || "free"
+  };
+ } catch(e){
+  return null;
+ }
+}
+
+function hashCode(s){
+ let h=0;
+ for(let i=0;i<s.length;i++){
+  h=(h<<5)-h+s.charCodeAt(i);
+  h|=0;
+ }
+ return h;
+}
+
 (function(){
- if(!localStorage.getItem("ecomlytics_user")) window.location.href="/login.html";
+ if(!getUserSession()) window.location.href="/login.html";
+})();
+
+(function trackGA4UserSession(){
+ const u = getUserSession();
+ if(u && typeof gtag === "function"){
+  gtag('config', 'G-N4DCRNR7VV', {
+   'user_id': u.id,
+   'user_properties': {
+    'user_email': u.email,
+    'user_name': u.name,
+    'user_plan': u.plan || 'free'
+   }
+  });
+ }
 })();
 
 const fmt = n => new Intl.NumberFormat("en-IN",{maximumFractionDigits:0}).format(n);
@@ -9,11 +55,14 @@ const money = n => "₹" + fmt(n);
 
 const PLAN_META = {
  free: {name:"Free", price:0, advanced:false},
- starter: {name:"Starter", price:999, advanced:true},
- growth: {name:"Growth", price:2999, advanced:true},
- pro: {name:"Pro", price:7999, advanced:true}
+ base: {name:"Base Pack", price:19, advanced:true},
+ starter: {name:"Starter", price:29, advanced:true},
+ growth: {name:"Starter", price:29, advanced:true},
+ pro: {name:"Pro", price:49, advanced:true}
 };
-function currentPlan(){ return localStorage.getItem("ecomlytics_plan") || "free"; }
+function currentPlan(){
+ return localStorage.getItem("ecomlytics_plan") || (getUserSession() && getUserSession().plan) || "free";
+}
 function planMeta(){ return PLAN_META[currentPlan()] || PLAN_META.free; }
 function hasAdvancedAccess(){ return planMeta().advanced === true; }
 function upgradeUrl(){ return "/pages/subscription.html"; }
@@ -37,11 +86,12 @@ window.addEventListener("error", e => {
 });
 
 function shell(active){
+ const u = getUserSession() || { name: "Analytics User", company: "Workspace", email: "user@ecomlytics.com" };
  document.querySelector(".app").innerHTML = `
  <aside class="sidebar">
   <div class="brand"><div class="brand-mark">E</div>Ecom<span>lytics</span></div>
 
-  <div class="nav-label">Workspace</div>
+  <div class="nav-label">${u.company || u.name + "'s Store"}</div>
 
   <nav class="nav">
    <a href="/index.html" class="${active==="overview"?"active":""}">
@@ -72,26 +122,20 @@ function shell(active){
   <div class="nav-label">Platform</div>
 
   <nav class="nav">
-   <a href="/pages/data-sources.html" class="${active==="data-sources"?"active":""}">
-    <span class="ico">⇄</span>Data Sources
-   </a>
-
    <a href="/pages/subscription.html" class="${active==="subscription"?"active":""}">
     <span class="ico">◇</span>Plans & Billing
-   </a>
-
-   <a href="#">
-    <span class="ico">⚙</span>Settings
    </a>
   </nav>
 
   <div class="sidebar-footer">
-   <span class="status-dot"></span>Analytics engine online
+   <div style="font-weight:700;color:#e2e8f0;margin-bottom:2px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${u.name}</div>
+   <div style="font-size:10px;color:#94a3b8;margin-bottom:8px;word-break:break-all">${u.email}</div>
+   <span class="status-dot"></span><span style="font-size:11px">Engine online</span>
    <br>
 
    <a href="#"
       onclick="localStorage.removeItem('ecomlytics_user');window.location.href='/login.html';return false;"
-      style="display:inline-block;margin-top:8px;color:#aab6ce">
+      style="display:inline-block;margin-top:8px;color:#cbd5e1;font-size:11px">
       Sign out
    </a>
   </div>
@@ -102,6 +146,7 @@ function shell(active){
 }
 
 function header(title,sub){
+ const u = getUserSession() || { name: "User", initials: "US", email: "user@ecomlytics.com", plan: "free" };
  return `
  <div class="top">
   <div class="title">
@@ -110,13 +155,37 @@ function header(title,sub){
   </div>
 
   <div class="top-right">
-   <span class="badge"><span class="status-dot"></span>Demo Data</span>
+   <span class="badge"><span class="status-dot"></span>Live Analytics</span>
    <a class="plan-badge ${hasAdvancedAccess()?"paid":"free"}" href="${upgradeUrl()}">${planMeta().name} Plan</a>
    ${hasAdvancedAccess() ? "" : `<a class="upgrade-link" href="${upgradeUrl()}">Upgrade</a>`}
-   <div class="profile">GY</div>
+   <div style="position:relative;display:inline-block">
+    <div class="profile" onclick="toggleProfileDropdown(event)" title="${u.name} (${u.email})">${u.initials}</div>
+    <div id="userProfileDropdown" style="display:none;position:absolute;right:0;top:48px;width:250px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,0.15);padding:14px;z-index:999;color:#0f172a">
+     <div style="font-weight:800;font-size:14px;color:#0f172a;margin-bottom:2px">${u.name}</div>
+     <div style="font-size:11px;color:#64748b;margin-bottom:10px;word-break:break-all">${u.email}</div>
+     <div style="padding:8px 10px;background:#f8fafc;border-radius:8px;font-size:11px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+      <span style="color:#64748b">Current Plan</span>
+      <span class="pill ${hasAdvancedAccess()?'good':''}">${planMeta().name}</span>
+     </div>
+     <div style="font-size:10px;color:#94a3b8;margin-bottom:12px">User ID: <code>${u.id || 'usr_demo'}</code></div>
+     <a href="${upgradeUrl()}" style="display:block;text-align:center;padding:8px;background:#eef2ff;border-radius:6px;font-size:11px;font-weight:700;color:#4f46e5;text-decoration:none;margin-bottom:8px">Plans & Billing</a>
+     <button onclick="localStorage.removeItem('ecomlytics_user');window.location.href='/login.html'" style="width:100%;padding:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:11px;font-weight:700;color:#dc2626;cursor:pointer">Sign out</button>
+    </div>
+   </div>
   </div>
- </div>`
+ </div>`;
 }
+
+window.toggleProfileDropdown = function(e){
+ e.stopPropagation();
+ const el = document.getElementById("userProfileDropdown");
+ if(el) el.style.display = el.style.display === "none" ? "block" : "none";
+};
+
+document.addEventListener("click", function(){
+ const el = document.getElementById("userProfileDropdown");
+ if(el) el.style.display = "none";
+});
 
 function deltaHtml(m){
  if(!m || m.change_pct===null || m.change_pct===undefined){
@@ -885,13 +954,13 @@ async function subscriptionPage(){
 
  <div class="card" style="margin-top:18px">
   <div class="section-title">Choose your level</div>
-  <p class="note">The subscription structure follows the Ecomlytics product plan: Free ₹0, Starter ₹999/month, Growth ₹2,999/month and Pro ₹7,999/month. Payments powered by <b>Razorpay</b>.</p>
+  <p class="note">The subscription structure follows the Ecomlytics product plan: Free ₹0, Base Pack ₹19/month, Starter ₹29/month and Pro ₹49/month. Payments powered by <b>Razorpay</b>.</p>
  </div>
 
  <div class="pricing-grid" style="margin-top:18px">
   ${plans.map(p=>`
-   <div class="pricing-card ${p.id===currentPlan()?"current":""} ${p.id==="growth"?"featured":""}">
-    ${p.id==="growth"?`<div class="featured-label">Recommended for growing teams</div>`:""}
+   <div class="pricing-card ${p.id===currentPlan()?"current":""} ${p.id==="pro"?"featured":""}">
+    ${p.id==="pro"?`<div class="featured-label">Recommended for growing teams</div>`:""}
     <div class="pricing-top">
      <div><div class="plan-name">${p.name}</div><p>${p.description}</p></div>
      ${p.id===currentPlan()?`<span class="pill good">Current plan</span>`:""}
@@ -926,7 +995,7 @@ async function subscriptionPage(){
    <div class="section-title" style="margin-bottom:0">Live payment demo — 35 dummy transactions</div>
    <button class="btn secondary-btn" id="loadDummyBtn" onclick="loadDummyPayments()" style="font-size:12px">↻ Load dummy payments</button>
   </div>
-  <p class="note" style="margin-top:6px">35 pre-generated Razorpay-style payments (Starter ₹999 · Growth ₹2,999 · Pro ₹7,999) to demonstrate how the transaction log looks. Each also triggers a GA4 <code>purchase</code> event.</p>
+  <p class="note" style="margin-top:6px">35 pre-generated Razorpay-style payments (Base Pack ₹19 · Starter ₹29 · Pro ₹49) to demonstrate how the transaction log looks. Each also triggers a GA4 <code>purchase</code> event.</p>
   <div id="dummyPaymentsSummary" style="display:none;margin-top:14px"></div>
   <div id="dummyPaymentsTable" style="margin-top:12px"><div class="empty">Click "Load dummy payments" to generate and display 35 sample Razorpay transactions.</div></div>
  </div>
@@ -1087,9 +1156,28 @@ async function launchRazorpaySdk(plan, name, email, orderData){
  rzp.open();
 }
 
+function getPaymentHistoryKey(){
+ const u = getUserSession();
+ return u && u.id ? "ecomlytics_payments_" + u.id : "ecomlytics_payments";
+}
+
 function onPaymentSuccess(verifyData, plan, customerName, amount){
  localStorage.setItem("ecomlytics_plan", plan);
- const history = JSON.parse(localStorage.getItem("ecomlytics_payments")||"[]");
+ const u = getUserSession();
+ if(u){
+  u.plan = plan;
+  localStorage.setItem("ecomlytics_user", JSON.stringify(u));
+  try {
+   const accounts = JSON.parse(localStorage.getItem("ecomlytics_accounts")||"[]");
+   const idx = accounts.findIndex(a=>a.email && u.email && a.email.toLowerCase()===u.email.toLowerCase());
+   if(idx !== -1){
+    accounts[idx].plan = plan;
+    localStorage.setItem("ecomlytics_accounts", JSON.stringify(accounts));
+   }
+  } catch(e){}
+ }
+ const key = getPaymentHistoryKey();
+ const history = JSON.parse(localStorage.getItem(key)||"[]");
  history.unshift({
   transaction_id: verifyData.transaction_id,
   plan: verifyData.plan.name,
@@ -1098,7 +1186,7 @@ function onPaymentSuccess(verifyData, plan, customerName, amount){
   mode: verifyData.mode === "live" ? "Live" : verifyData.mode === "test" ? "Test" : "Demo",
   gateway: "Razorpay",
  });
- localStorage.setItem("ecomlytics_payments", JSON.stringify(history.slice(0,50)));
+ localStorage.setItem(key, JSON.stringify(history.slice(0,50)));
 
  // Fire GA4 purchase event
  if(typeof gtag === "function"){
@@ -1151,22 +1239,18 @@ async function loadDummyPayments(){
   if(summaryEl){
    summaryEl.style.display = "block";
    summaryEl.innerHTML = `
-    <div class="grid four" style="margin-bottom:12px">
+    <div class="grid three" style="margin-bottom:12px">
      <div class="metric-card" style="background:var(--bg-card)">
-      <div class="metric-label">Total Transactions</div>
-      <div class="metric-value">${s.total_count}</div>
+      <div class="metric-label">Base Pack (₹19)</div>
+      <div class="metric-value">${s.base_count || 0}</div>
      </div>
      <div class="metric-card" style="background:var(--bg-card)">
-      <div class="metric-label">Total Revenue</div>
-      <div class="metric-value">${money(s.total_revenue)}</div>
+      <div class="metric-label">Starter (₹29)</div>
+      <div class="metric-value">${s.starter_count || 0}</div>
      </div>
      <div class="metric-card" style="background:var(--bg-card)">
-      <div class="metric-label">Starter (₹999)</div>
-      <div class="metric-value">${s.starter_count}</div>
-     </div>
-     <div class="metric-card" style="background:var(--bg-card)">
-      <div class="metric-label">Growth + Pro</div>
-      <div class="metric-value">${s.growth_count + s.pro_count}</div>
+      <div class="metric-label">Pro (₹49)</div>
+      <div class="metric-value">${s.pro_count || 0}</div>
      </div>
     </div>
     <p class="note" style="margin-bottom:4px">✓ <b>${payments.length} GA4 <code>purchase</code> events fired</b> — check your Google Analytics Realtime → Events tab.</p>
@@ -1205,74 +1289,23 @@ async function loadDummyPayments(){
 
 function renderPaymentHistory(){
  const el=document.getElementById("paymentHistory"); if(!el)return;
- const history=JSON.parse(localStorage.getItem("ecomlytics_payments")||"[]");
+ const key = getPaymentHistoryKey();
+ let history=JSON.parse(localStorage.getItem(key)||"[]");
+ history = history.map(x => {
+  if (x.amount >= 999 || x.plan === "Growth") {
+   x.amount = 49;
+   x.plan = "Pro";
+  }
+  return x;
+ });
+ localStorage.setItem(key, JSON.stringify(history));
  if(!history.length){el.innerHTML='<div class="empty">No payments yet. Complete a payment above — it will appear here.</div>';return;}
  el.innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Transaction</th><th>Plan</th><th>Amount</th><th>Gateway</th><th>Date</th><th>Mode</th></tr></thead><tbody>${history.map(x=>`<tr><td><b>${x.transaction_id}</b></td><td>${x.plan}</td><td>${money(x.amount)}</td><td>${x.gateway||"—"}</td><td>${new Date(x.date).toLocaleString()}</td><td><span class="pill">${x.mode}</span></td></tr>`).join("")}</tbody></table></div>`;
-}
-
-async function dataSourcesPage(){
-
- shell("data-sources");
-
- const res = await api("/data-sources");
- const sources = res.sources;
-
- const stateBadge = s => {
-  const map = {
-   connected: ["Connected","ok"],
-   disconnected: ["Not connected","warn"],
-   not_configured: ["Configuration required","warn"],
-   syncing: ["Syncing","info"],
-  };
-  const [label, cls] = map[s] || [s, "warn"];
-  return `<span class="source-state ${cls}">${label}</span>`;
- };
-
- document.getElementById("content").innerHTML =
-
- header(
-  "Data Sources",
-  "Connect and manage where your analytics data comes from"
- ) +
-
- `<div class="grid two" style="margin-top:18px">` +
-
- sources.map(s => `
-  <div class="card">
-   <div class="section-title">${s.name}</div>
-   ${stateBadge(s.state)}
-   <p class="note" style="margin-top:8px">${s.message || ""}</p>
-   ${s.property_id ? `<p class="note">Property: ${s.property_id}</p>` : ""}
-   <p class="note">Last synced: ${s.last_synced ? new Date(s.last_synced).toLocaleString() : "Never"}</p>
-   ${s.id === "google_analytics" ? `<button class="btn" id="connect-ga">Connect Google Analytics</button>` : ""}
-  </div>
- `).join("") +
-
- `</div>`;
-
- const btn = document.getElementById("connect-ga");
- if(btn){
-  btn.onclick = async () => {
-   try {
-    const r = await fetch(API + "/data-sources/google/connect", {method:"POST"});
-    const data = await r.json();
-    if(!r.ok){
-     alert(data.detail || "Google Analytics is not configured on this server yet.");
-     return;
-    }
-    window.location.href = data.authorization_url;
-   } catch(e){
-    alert("Could not start the Google Analytics connection.");
-   }
-  };
- }
 }
 
 const page=document.body.dataset.page;
 
 if(page==="overview") overviewPage();
-
-if(page==="data-sources") dataSourcesPage();
 
 if(page==="sales") salesPage();
 

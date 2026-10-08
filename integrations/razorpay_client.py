@@ -19,9 +19,10 @@ except ImportError:
 
 
 PLAN_AMOUNTS = {
-    "starter": {"name": "Starter", "price": 999},
-    "growth": {"name": "Growth", "price": 2999},
-    "pro": {"name": "Pro", "price": 7999},
+    "base": {"name": "Base Pack", "price": 19},
+    "starter": {"name": "Starter", "price": 29},
+    "growth": {"name": "Starter", "price": 29},
+    "pro": {"name": "Pro", "price": 49},
 }
 
 SAMPLE_CUSTOMERS = [
@@ -74,7 +75,7 @@ def create_order(plan_id: str) -> dict:
     """
     plan = PLAN_AMOUNTS.get(plan_id.lower())
     if not plan:
-        raise ValueError(f"Invalid plan '{plan_id}'. Choose starter, growth, or pro.")
+        raise ValueError(f"Invalid plan '{plan_id}'. Choose base, starter, or pro.")
 
     amount_rupees = plan["price"]
     amount_paise = amount_rupees * 100
@@ -145,21 +146,18 @@ def verify_payment(order_id: str, payment_id: str, signature: str) -> bool:
 def generate_dummy_payments(total_count: int = 35) -> list[dict]:
     """
     Generate exactly `total_count` (35) dummy payments across:
-      - 999 (Starter)
-      - 2999 (Growth)
-      - 7999 (Pro)
+      - 19 (Base Pack)
+      - 29 (Starter)
+      - 49 (Pro)
     with random quantities of each, realistic timestamps, Razorpay transaction IDs,
     and formatted ready for Google Analytics 4 purchase event sync.
     """
-    # Randomly partition 35 into 3 buckets with minimums to ensure all plans exist
-    # E.g. starter: ~12-20, growth: ~8-15, pro: ~4-10
-    plans = ["starter", "growth", "pro"]
+    plans = ["base", "starter", "pro"]
 
-    # Random distribution that sums to total_count
     plan_pool = (
-        ["starter"] * random.randint(14, 18)
-        + ["growth"] * random.randint(10, 14)
-        + ["pro"] * random.randint(5, 8)
+        ["base"] * random.randint(14, 18)
+        + ["starter"] * random.randint(10, 14)
+        + ["pro"] * random.randint(6, 10)
     )
     # Adjust to exactly total_count
     while len(plan_pool) < total_count:

@@ -14,8 +14,7 @@ from analytics.metrics import (
 
 from insights.engine import generate_insights
 
-from integrations.data_sources import list_data_sources
-from integrations import google_analytics, razorpay_client
+from integrations import razorpay_client
 import config
 import secrets
 from fastapi import HTTPException, Request
@@ -242,47 +241,45 @@ def subscription_plans():
                 "advanced": False,
             },
             {
-                "id": "starter",
-                "name": "Starter",
-                "price": 999,
+                "id": "base",
+                "name": "Base Pack",
+                "price": 19,
                 "period": "month",
-                "description": "Advanced analytics for growing stores.",
+                "description": "Essential analytics for small stores.",
                 "features": [
                     "Everything in Free",
-                    "Advanced product intelligence",
-                    "Margin and return analysis",
-                    "Advanced retention analysis",
-                    "Business insight recommendations",
+                    "Standard product intelligence",
+                    "Customer order history",
+                    "Basic retention metrics",
                 ],
                 "advanced": True,
             },
             {
-                "id": "growth",
-                "name": "Growth",
-                "price": 2999,
+                "id": "starter",
+                "name": "Starter",
+                "price": 29,
                 "period": "month",
-                "description": "Decision intelligence for scaling teams.",
+                "description": "Advanced analytics for growing stores.",
                 "features": [
-                    "Everything in Starter",
-                    "Advanced insight engine",
-                    "Data-source integrations",
-                    "Deeper customer intelligence",
-                    "Priority analytics workflows",
+                    "Everything in Base Pack",
+                    "Advanced product intelligence",
+                    "Margin and return analysis",
+                    "Advanced retention analysis",
                 ],
                 "advanced": True,
             },
             {
                 "id": "pro",
                 "name": "Pro",
-                "price": 7999,
+                "price": 49,
                 "period": "month",
-                "description": "The full Ecomlytics decision platform.",
+                "description": "Full Ecomlytics decision platform & AI intelligence.",
                 "features": [
-                    "Everything in Growth",
-                    "AI Advisor",
-                    "Advanced recommendations",
-                    "Executive decision views",
-                    "Premium analytics capabilities",
+                    "Everything in Starter",
+                    "Advanced insight engine",
+                    "Data-source integrations",
+                    "Deeper customer intelligence",
+                    "AI Advisor & Executive views",
                 ],
                 "advanced": True,
             },
@@ -364,9 +361,9 @@ def get_dummy_payments(count: int = 35):
     summary = {
         "total_count": len(payments),
         "total_revenue": sum(p["amount"] for p in payments),
-        "starter_count": sum(1 for p in payments if p["amount"] == 999),
-        "growth_count": sum(1 for p in payments if p["amount"] == 2999),
-        "pro_count": sum(1 for p in payments if p["amount"] == 7999),
+        "base_count": sum(1 for p in payments if p["amount"] == 19),
+        "starter_count": sum(1 for p in payments if p["amount"] == 29),
+        "pro_count": sum(1 for p in payments if p["amount"] == 49),
     }
     return {
         "success": True,
@@ -384,44 +381,7 @@ def health():
     }
 
 
-# ============================================================
-# DATA SOURCES / GOOGLE ANALYTICS
-# ============================================================
-#
-# Honest connection state only. Nothing here claims to be "Live"
-# unless real GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI are set.
-# ============================================================
 
-@app.get("/api/data-sources")
-def get_data_sources():
-    return {"sources": list_data_sources()}
-
-
-@app.post("/api/data-sources/google/connect")
-def connect_google_analytics():
-    try:
-        state = secrets.token_urlsafe(16)
-        url = google_analytics.build_authorization_url(state)
-        return {"authorization_url": url, "state": state}
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@app.get("/api/data-sources/google/callback")
-def google_analytics_callback(code: str | None = None, state: str | None = None):
-    # Token exchange against integrations.google_analytics.TOKEN_URL is
-    # implemented at the adapter layer, but persisting the resulting
-    # tokens requires the workspace/user model described in
-    # ROADMAP.md, which is not yet built. Report this honestly rather
-    # than pretending the connection succeeded.
-    raise HTTPException(
-        status_code=501,
-        detail=(
-            "OAuth callback received, but token storage requires the "
-            "workspace/auth layer, which is not implemented yet. "
-            "See ROADMAP.md."
-        ),
-    )
 
 
 # ============================================================

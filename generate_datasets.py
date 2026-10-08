@@ -50,17 +50,17 @@ PRODUCTS = [
         "product_id": "P001",
         "product_name": "Premium Hoodie",
         "category": "Fashion",
-        "price": 2499,
-        "cost": 1300,
-        "rating": 3.2,
+        "price": 899,
+        "cost": 420,
+        "rating": 3.8,
         "performance": "weak_conversion"
     },
     {
         "product_id": "P002",
         "product_name": "Running Shoes",
         "category": "Footwear",
-        "price": 3999,
-        "cost": 2100,
+        "price": 1299,
+        "cost": 650,
         "rating": 4.4,
         "performance": "best"
     },
@@ -68,17 +68,17 @@ PRODUCTS = [
         "product_id": "P003",
         "product_name": "Wireless Earbuds",
         "category": "Electronics",
-        "price": 2999,
-        "cost": 1500,
-        "rating": 3.8,
+        "price": 999,
+        "cost": 480,
+        "rating": 3.9,
         "performance": "normal"
     },
     {
         "product_id": "P004",
         "product_name": "Smart Watch",
         "category": "Electronics",
-        "price": 5499,
-        "cost": 3200,
+        "price": 1499,
+        "cost": 750,
         "rating": 4.2,
         "performance": "best"
     },
@@ -86,8 +86,8 @@ PRODUCTS = [
         "product_id": "P005",
         "product_name": "Cotton T-Shirt",
         "category": "Fashion",
-        "price": 999,
-        "cost": 420,
+        "price": 399,
+        "cost": 160,
         "rating": 4.1,
         "performance": "best"
     },
@@ -95,8 +95,8 @@ PRODUCTS = [
         "product_id": "P006",
         "product_name": "Denim Jacket",
         "category": "Fashion",
-        "price": 2799,
-        "cost": 1450,
+        "price": 999,
+        "cost": 480,
         "rating": 3.9,
         "performance": "normal"
     },
@@ -104,8 +104,8 @@ PRODUCTS = [
         "product_id": "P007",
         "product_name": "Laptop Backpack",
         "category": "Accessories",
-        "price": 1799,
-        "cost": 850,
+        "price": 799,
+        "cost": 360,
         "rating": 4.5,
         "performance": "best"
     },
@@ -113,8 +113,8 @@ PRODUCTS = [
         "product_id": "P008",
         "product_name": "Bluetooth Speaker",
         "category": "Electronics",
-        "price": 2299,
-        "cost": 1200,
+        "price": 899,
+        "cost": 420,
         "rating": 3.7,
         "performance": "normal"
     },
@@ -122,8 +122,8 @@ PRODUCTS = [
         "product_id": "P009",
         "product_name": "Sunglasses",
         "category": "Accessories",
-        "price": 1499,
-        "cost": 600,
+        "price": 499,
+        "cost": 200,
         "rating": 4.0,
         "performance": "normal"
     },
@@ -131,8 +131,8 @@ PRODUCTS = [
         "product_id": "P010",
         "product_name": "Sports Track Pants",
         "category": "Fashion",
-        "price": 1599,
-        "cost": 700,
+        "price": 699,
+        "cost": 310,
         "rating": 4.3,
         "performance": "best"
     },
@@ -140,8 +140,8 @@ PRODUCTS = [
         "product_id": "P011",
         "product_name": "Face Serum",
         "category": "Beauty",
-        "price": 1299,
-        "cost": 500,
+        "price": 599,
+        "cost": 240,
         "rating": 4.2,
         "performance": "normal"
     },
@@ -149,8 +149,8 @@ PRODUCTS = [
         "product_id": "P012",
         "product_name": "Moisturizer",
         "category": "Beauty",
-        "price": 899,
-        "cost": 350,
+        "price": 399,
+        "cost": 150,
         "rating": 4.4,
         "performance": "best"
     },
@@ -158,8 +158,8 @@ PRODUCTS = [
         "product_id": "P013",
         "product_name": "Coffee Maker",
         "category": "Home",
-        "price": 3499,
-        "cost": 1900,
+        "price": 1299,
+        "cost": 680,
         "rating": 4.1,
         "performance": "normal"
     },
@@ -167,8 +167,8 @@ PRODUCTS = [
         "product_id": "P014",
         "product_name": "Air Fryer",
         "category": "Home",
-        "price": 5999,
-        "cost": 3500,
+        "price": 1499,
+        "cost": 790,
         "rating": 4.5,
         "performance": "best"
     },
@@ -176,8 +176,8 @@ PRODUCTS = [
         "product_id": "P015",
         "product_name": "Yoga Mat",
         "category": "Fitness",
-        "price": 1199,
-        "cost": 450,
+        "price": 499,
+        "cost": 190,
         "rating": 3.9,
         "performance": "normal"
     }
@@ -197,55 +197,25 @@ def generate_products():
         performance = product["performance"]
 
         if performance == "weak_conversion":
-
-            # Deliberately create the PPT-style example:
-            # high traffic + weak conversion.
-
-            views = 52400
-            add_to_cart = 1850
-            checkout = 1100
-            units_sold = 942
-            returns = 31
+            views = 1850
+            add_to_cart = 160
+            checkout = 95
+            units_sold = 32
+            returns = 4
 
         elif performance == "best":
-
-            views = random.randint(18000, 42000)
-
-            add_to_cart = int(
-                views * random.uniform(0.16, 0.23)
-            )
-
-            checkout = int(
-                add_to_cart * random.uniform(0.55, 0.72)
-            )
-
-            units_sold = int(
-                checkout * random.uniform(0.55, 0.78)
-            )
-
-            returns = int(
-                units_sold * random.uniform(0.015, 0.035)
-            )
+            views = random.randint(1100, 1800)
+            add_to_cart = int(views * random.uniform(0.16, 0.22))
+            checkout = int(add_to_cart * random.uniform(0.55, 0.70))
+            units_sold = int(checkout * random.uniform(0.60, 0.75))
+            returns = int(units_sold * random.uniform(0.015, 0.035))
 
         else:
-
-            views = random.randint(12000, 38000)
-
-            add_to_cart = int(
-                views * random.uniform(0.10, 0.17)
-            )
-
-            checkout = int(
-                add_to_cart * random.uniform(0.45, 0.65)
-            )
-
-            units_sold = int(
-                checkout * random.uniform(0.45, 0.70)
-            )
-
-            returns = int(
-                units_sold * random.uniform(0.025, 0.065)
-            )
+            views = random.randint(650, 1200)
+            add_to_cart = int(views * random.uniform(0.10, 0.16))
+            checkout = int(add_to_cart * random.uniform(0.45, 0.62))
+            units_sold = int(checkout * random.uniform(0.50, 0.68))
+            returns = int(units_sold * random.uniform(0.025, 0.055))
 
         rows.append({
             "product_id": product["product_id"],
@@ -268,7 +238,7 @@ def generate_products():
 # GENERATE CUSTOMERS
 # ============================================================
 
-def generate_customers(count=500):
+def generate_customers(count=120):
 
     rows = []
 
@@ -287,87 +257,29 @@ def generate_customers(count=500):
         customer_type = random.random()
 
         if customer_type < 0.08:
-
-            # VIP
-
-            orders = random.randint(8, 18)
-
-            total_spend = random.randint(
-                35000,
-                95000
-            )
-
-            last_order_days = random.randint(
-                1,
-                15
-            )
+            orders = random.randint(4, 7)
+            total_spend = random.randint(2400, 4800)
+            last_order_days = random.randint(1, 15)
 
         elif customer_type < 0.30:
-
-            # Loyal
-
-            orders = random.randint(4, 8)
-
-            total_spend = random.randint(
-                15000,
-                35000
-            )
-
-            last_order_days = random.randint(
-                1,
-                30
-            )
+            orders = random.randint(3, 5)
+            total_spend = random.randint(1200, 2500)
+            last_order_days = random.randint(1, 30)
 
         elif customer_type < 0.50:
-
-            # Returning
-
             orders = random.randint(2, 3)
-
-            total_spend = random.randint(
-                5000,
-                16000
-            )
-
-            last_order_days = random.randint(
-                5,
-                45
-            )
+            total_spend = random.randint(600, 1400)
+            last_order_days = random.randint(5, 45)
 
         elif customer_type < 0.78:
-
-            # New
-
             orders = 1
-
-            total_spend = random.randint(
-                800,
-                6000
-            )
-
-            last_order_days = random.randint(
-                1,
-                30
-            )
+            total_spend = random.randint(299, 899)
+            last_order_days = random.randint(1, 30)
 
         else:
-
-            # At Risk
-
-            orders = random.randint(
-                2,
-                6
-            )
-
-            total_spend = random.randint(
-                6000,
-                28000
-            )
-
-            last_order_days = random.randint(
-                61,
-                150
-            )
+            orders = random.randint(2, 4)
+            total_spend = random.randint(700, 1800)
+            last_order_days = random.randint(61, 150)
 
         last_date = (
             date.today()
@@ -379,7 +291,7 @@ def generate_customers(count=500):
             - timedelta(
                 days=random.randint(
                     30,
-                    400
+                    200
                 )
             )
         )
@@ -405,7 +317,7 @@ def generate_customers(count=500):
 def generate_orders(
     customers,
     products,
-    count=5000
+    count=200
 ):
 
     rows = []
@@ -413,91 +325,40 @@ def generate_orders(
     customer_weights = []
 
     for customer in customers:
-
-        # Customers with more orders get higher
-        # probability of appearing in the order dataset.
-
-        weight = max(
-            1,
-            int(customer["orders"])
-        )
-
+        weight = max(1, int(customer["orders"]))
         customer_weights.append(weight)
 
     customer_pool = []
 
-    for customer, weight in zip(
-        customers,
-        customer_weights
-    ):
+    for customer, weight in zip(customers, customer_weights):
+        customer_pool.extend([customer] * weight)
 
-        customer_pool.extend(
-            [customer] * weight
-        )
-
-    start_date = date.today() - timedelta(days=180)
+    start_date = date.today() - timedelta(days=90)
 
     for i in range(1, count + 1):
 
         order_id = f"O{i:06d}"
 
-        customer = random.choice(
-            customer_pool
-        )
+        customer = random.choice(customer_pool)
+        product = random.choice(products)
 
-        product = random.choice(
-            products
-        )
+        quantity = random.randint(1, 2)
+        price = float(product["price"])
 
-        quantity = random.randint(
-            1,
-            4
-        )
-
-        price = float(
-            product["price"]
-        )
-
-        discount = random.choice([
-            0,
-            0,
-            50,
-            100,
-            150,
-            200,
-            300,
-            500
-        ])
+        discount = random.choice([0, 0, 20, 50, 80])
 
         gross = price * quantity
+        revenue = max(0, gross - discount)
 
-        revenue = max(
-            0,
-            gross - discount
-        )
-
-        order_date = (
-            start_date
-            + timedelta(
-                days=random.randint(
-                    0,
-                    180
-                )
-            )
-        )
+        order_date = start_date + timedelta(days=random.randint(0, 90))
 
         status_roll = random.random()
 
-        if status_roll < 0.93:
-
+        if status_roll < 0.92:
             status = "Completed"
-
         elif status_roll < 0.97:
-
             status = "Returned"
-
         else:
-
             status = "Cancelled"
 
         rows.append({
@@ -575,7 +436,7 @@ def main():
     # Customers
 
     customers = generate_customers(
-        count=500
+        count=120
     )
 
     write_csv(
@@ -588,7 +449,7 @@ def main():
     orders = generate_orders(
         customers,
         products,
-        count=5000
+        count=180
     )
 
     write_csv(
