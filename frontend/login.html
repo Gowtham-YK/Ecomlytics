@@ -236,7 +236,7 @@ function generateUserId(email) {
   return 'usr_' + Math.abs(hash);
 }
 
-document.getElementById('authForm').addEventListener('submit', function(e) {
+document.getElementById('authForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   clearErrors();
 
@@ -244,6 +244,7 @@ document.getElementById('authForm').addEventListener('submit', function(e) {
   const passwordInput = document.getElementById('password');
   const nameInput = document.getElementById('fullName');
   const companyInput = document.getElementById('company');
+  const submitBtn = document.getElementById('submitBtn');
 
   const email = emailInput.value.trim();
   const password = passwordInput.value;
@@ -261,104 +262,76 @@ document.getElementById('authForm').addEventListener('submit', function(e) {
   if (!isValidEmail(email)) {
     emailInput.classList.add('input-error');
     const errEl = document.getElementById('emailError');
-    errEl.innerText = 'Please enter a valid email address with a domain (e.g. name@company.com)';
+    errEl.innerText = 'Please enter a valid email address (e.g. name@company.com)';
     errEl.style.display = 'block';
     hasError = true;
   }
 
-  if (!password || password.length < 6) {
+  if (!password || password.length < 8) {
     passwordInput.classList.add('input-error');
-    document.getElementById('passwordError').style.display = 'block';
+    const pErr = document.getElementById('passwordError');
+    pErr.innerText = 'Password must be at least 8 characters long.';
+    pErr.style.display = 'block';
     hasError = true;
   }
 
   if (hasError) return;
 
-  const accounts = getStoredAccounts();
-  const existingAccIndex = accounts.findIndex(a => a.email.toLowerCase() === email.toLowerCase());
+  const originalBtnText = submitBtn.innerText;
+  submitBtn.disabled = true;
+  submitBtn.innerText = currentMode === 'signup' ? 'Creating workspace...' : 'Signing in...';
 
-  let userProfile = null;
+  try {
+    let endpoint = currentMode === 'signup' ? '/api/auth/register' : '/api/auth/login';
+    let payload = currentMode === 'signup'
+      ? { email: email, password: password, display_name: fullName, workspace_name: company || (fullName + "'s Store") }
+      : { email: email, password: password };
 
-  if (currentMode === 'signup') {
-    if (existingAccIndex !== -1) {
-      emailInput.classList.add('input-error');
-      const errEl = document.getElementById('emailError');
-      errEl.innerText = 'An account with this email address already exists. Please sign in instead.';
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      submitBtn.disabled = false;
+      submitBtn.innerText = originalBtnText;
+      const detail = data.detail || 'Authentication failed. Please check your credentials.';
+      const errEl = document.getElementById(currentMode === 'signup' ? 'emailError' : 'passwordError');
+      errEl.innerText = detail;
       errEl.style.display = 'block';
+      if (currentMode === 'signup') emailInput.classList.add('input-error');
+      else passwordInput.classList.add('input-error');
       return;
     }
 
-    const nameToUse = fullName || email.split('@')[0];
-    userProfile = {
-      id: generateUserId(email),
-      name: nameToUse,
-      email: email,
-      password: password,
-      initials: generateInitials(nameToUse, email),
-      company: company || (nameToUse + "'s Store"),
-      plan: 'free',
-      created_at: new Date().toISOString(),
-      last_active: new Date().toISOString()
-    };
-
-    accounts.push(userProfile);
-    saveStoredAccounts(accounts);
-  } else {
-    // Sign in mode
-    if (existingAccIndex !== -1) {
-      const existing = accounts[existingAccIndex];
-      if (existing.password && existing.password !== password) {
-        passwordInput.classList.add('input-error');
-        const errEl = document.getElementById('passwordError');
-        errEl.innerText = 'Incorrect password for this account. Please try again.';
-        errEl.style.display = 'block';
-        return;
-      }
-      userProfile = existing;
-      userProfile.last_active = new Date().toISOString();
-      accounts[existingAccIndex] = userProfile;
-      saveStoredAccounts(accounts);
-    } else {
-      // Create user session for new valid email sign-in
-      const nameToUse = email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      userProfile = {
-        id: generateUserId(email),
-        name: nameToUse,
-        email: email,
-        password: password,
-        initials: generateInitials(nameToUse, email),
-        company: nameToUse + "'s Store",
-        plan: 'free',
-        created_at: new Date().toISOString(),
-        last_active: new Date().toISOString()
-      };
-      accounts.push(userProfile);
-      saveStoredAccounts(accounts);
+    // Success: store session profile and token
+    if (data.token) {
+      sessionStorage.setItem('ecomlytics_token', data.token);
     }
+    const user = data.user || {};
+    const ws = data.workspace || (data.workspaces && data.workspaces[0]) || { name: "My Store" };
+    const userProfile = {
+      id: user.id,
+      name: user.display_name,
+      email: user.email,
+      company: ws.name,
+      workspace_id: ws.id,
+      plan: 'free'
+    };
+    localStorage.setItem('ecomlytics_user', JSON.stringify(userProfile));
+
+    window.location.href = '/index.html';
+  } catch (err) {
+    submitBtn.disabled = false;
+    submitBtn.innerText = originalBtnText;
+    const errEl = document.getElementById('passwordError');
+    errEl.innerText = 'Unable to connect to Ecomlytics API. Please check your connection.';
+    errEl.style.display = 'block';
   }
-
-  // Save current active user session profile
-  localStorage.setItem('ecomlytics_user', JSON.stringify(userProfile));
-  localStorage.setItem('ecomlytics_plan', userProfile.plan || 'free');
-
-  // GA4 Active User & Event Tracking
-  if (typeof gtag === 'function') {
-    gtag('config', 'G-KYK82K8M9J', {
-      'user_id': userProfile.id,
-      'user_properties': {
-        'user_email': userProfile.email,
-        'user_name': userProfile.name,
-        'user_plan': userProfile.plan
-      }
-    });
-    gtag('event', currentMode === 'signup' ? 'sign_up' : 'login', {
-      'method': 'email',
-      'user_id': userProfile.id,
-      'user_email': userProfile.email
-    });
-  }
-
-  window.location.href = 'index.html';
 });
 </script>
 </body>
