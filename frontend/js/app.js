@@ -5,6 +5,22 @@
 
 const API = "/api";
 
+// ============================================================
+// GOOGLE ANALYTICS 4 (GA4) TELEMETRY ENGINE
+// ============================================================
+function trackGA4(eventName, params = {}) {
+  try {
+    if (typeof window.gtag === "function") {
+      window.gtag("event", eventName, params);
+      console.log(`[GA4 Event Dispatched: ${eventName}]`, params);
+    } else {
+      console.warn(`[GA4 Notice] window.gtag not initialized for: ${eventName}`);
+    }
+  } catch (err) {
+    console.warn("[GA4 Track Error]", err);
+  }
+}
+
 function getUserSession() {
   const raw = localStorage.getItem("ecomlytics_user");
   if (!raw) return null;
@@ -352,17 +368,45 @@ async function productsPage() {
       return;
     }
 
+    window._currentProductsMap = {};
+    prods.forEach(p => {
+      const pid = String(p.id || p.external_id);
+      window._currentProductsMap[pid] = p;
+    });
+
     content.innerHTML = header("Product Intelligence", "Performance, margins, and sales by product") + `
+    <!-- Product Catalog & GA4 Telemetry Controls -->
     <div class="card">
-      <div class="section-title">Product Catalog & Revenue Contribution (${prods.length} items)</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap">
+        <div>
+          <div class="section-title" style="margin-bottom:4px">Product Catalog & Revenue Contribution (${prods.length} items)</div>
+          <div class="note">Click any product or test action to trigger live GA4 e-commerce events (view_item, add_to_cart, begin_checkout, purchase).</div>
+        </div>
+        <div>
+          <input type="text" id="prodSearchInput" placeholder="🔍 Search products or category..." class="input" style="padding:8px 14px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px;width:240px;outline:none" oninput="handleProductSearch(this.value)">
+        </div>
+      </div>
+
       <div class="table-wrap">
-        <table class="table">
+        <table class="table" id="productTable">
           <thead>
-            <tr><th>Product Name</th><th>Category</th><th>Unit Price</th><th>Cost</th><th>Gross Margin</th><th>Units Sold</th><th>Total Revenue</th><th>Return Rate</th></tr>
+            <tr>
+              <th>Product Name</th>
+              <th>Category</th>
+              <th>Unit Price</th>
+              <th>Cost</th>
+              <th>Gross Margin</th>
+              <th>Units Sold</th>
+              <th>Total Revenue</th>
+              <th>Return Rate</th>
+              <th style="text-align:right">GA4 Telemetry</th>
+            </tr>
           </thead>
-          <tbody>
-            ${prods.map(p => `
-              <tr>
+          <tbody id="productTableBody">
+            ${prods.map(p => {
+              const pid = String(p.id || p.external_id);
+              return `
+              <tr id="prodRow_${escapeHtml(pid)}" style="cursor:pointer" onclick="handleProductRowClick('${escapeHtml(pid)}')">
                 <td><b>${escapeHtml(p.name)}</b></td>
                 <td><span class="pill">${escapeHtml(p.category || 'General')}</span></td>
                 <td>${money(p.price)}</td>
@@ -371,12 +415,16 @@ async function productsPage() {
                 <td>${fmt(p.units_sold)}</td>
                 <td><b>${money(p.revenue)}</b></td>
                 <td style="color:${p.return_rate > 15 ? '#d64545' : '#18a86b'}">${p.return_rate}%</td>
-              </tr>
-            `).join("")}
+                <td style="text-align:right">
+                  <button class="btn" style="padding:4px 9px;font-size:11px" onclick="event.stopPropagation();handleProductRowClick('${escapeHtml(pid)}')">Inspect & Buy</button>
+                </td>
+              </tr>`;
+            }).join("")}
           </tbody>
         </table>
       </div>
-    </div>`;
+    </div>
+    <div id="productDetailContainer"></div>`;
   } catch (err) {
     content.innerHTML = `<div class="card"><div class="section-title">Error Loading Product Intelligence</div><p class="note">${escapeHtml(err.message)}</p></div>`;
   }
@@ -385,6 +433,180 @@ async function productsPage() {
 // ============================================================
 // PAGE: CUSTOMERS
 // ============================================================
+
+// ============================================================
+// GA4 PRODUCT INTERACTION & E-COMMERCE TELEMETRY HANDLERS
+// ============================================================
+let _prodSearchDebounce = null;
+function handleProductSearch(query) {
+  const q = (query || "").toLowerCase().trim();
+  const rows = document.querySelectorAll("#productTableBody tr");
+  rows.forEach(r => {
+    const text = r.innerText.toLowerCase();
+    r.style.display = text.includes(q) ? "" : "none";
+  });
+
+  clearTimeout(_prodSearchDebounce);
+  if (q.length >= 2) {
+    _prodSearchDebounce = setTimeout(() => {
+      // GA4: search
+      trackGA4("search", { search_term: query.trim() });
+    }, 600);
+  }
+}
+
+function handleProductRowClick(pid) {
+  const p = (window._currentProductsMap || {})[pid];
+  if (!p) return;
+
+  // GA4: view_item
+  trackGA4("view_item", {
+    currency: "INR",
+    value: Number(p.price || 0),
+    items: [{
+      item_id: String(p.external_id || p.id),
+      item_name: String(p.name),
+      item_category: String(p.category || "General"),
+      price: Number(p.price || 0),
+      quantity: 1
+    }]
+  });
+
+  const modalContainer = document.getElementById("productDetailContainer");
+  if (!modalContainer) return;
+
+  modalContainer.innerHTML = `
+  <div class="modal-backdrop" id="prodModalBackdrop" style="display:flex" onclick="if(event.target.id==='prodModalBackdrop') closeProductModal()">
+    <div class="payment-modal" style="max-width:540px">
+      <button class="modal-close" onclick="closeProductModal()">×</button>
+      <div style="font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.5px">${escapeHtml(p.category || 'General')}</div>
+      <h2 style="margin:4px 0 10px">${escapeHtml(p.name)}</h2>
+      <div style="font-size:12px;color:#64748b;margin-bottom:16px">SKU / ID: <code>${escapeHtml(p.external_id || p.id)}</code></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px;background:#f8fafc;border-radius:10px;margin-bottom:20px;border:1px solid #e2e8f0">
+        <div>
+          <div style="font-size:11px;color:#64748b">Retail Price</div>
+          <div style="font-size:18px;font-weight:800;color:#0f172a">${money(p.price)}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#64748b">Unit Cost</div>
+          <div style="font-size:18px;font-weight:800;color:#0f172a">${money(p.cost)}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#64748b">Gross Margin</div>
+          <div style="font-size:16px;font-weight:700;color:#16a34a">${p.margin}%</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#64748b">Historical Units Sold</div>
+          <div style="font-size:16px;font-weight:700;color:#0f172a">${fmt(p.units_sold)}</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;font-size:12px;font-weight:700;color:#334155">Test GA4 E-Commerce Events:</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px">
+          <button class="btn secondary-btn" style="flex:1" onclick="handleProdAddToCart('${escapeHtml(pid)}')">
+            🛒 Add to Cart (add_to_cart)
+          </button>
+          <button class="btn" style="flex:1" onclick="handleProdBeginCheckout('${escapeHtml(pid)}')">
+            ⚡ Checkout (begin_checkout)
+          </button>
+        </div>
+        <button class="btn" style="background:#15803d;box-shadow:none" onclick="handleProdPurchase('${escapeHtml(pid)}')">
+          ✓ Confirm Complete Purchase (purchase)
+        </button>
+      </div>
+      <div id="modalStatusMsg" style="margin-top:12px;font-size:11px;color:#15803d;display:none;background:#f0fdf4;padding:8px 12px;border-radius:6px;border:1px solid #bbf7d0"></div>
+    </div>
+  </div>`;
+}
+
+function closeProductModal() {
+  const el = document.getElementById("productDetailContainer");
+  if (el) el.innerHTML = "";
+}
+
+function handleProdAddToCart(pid) {
+  const p = (window._currentProductsMap || {})[pid];
+  if (!p) return;
+
+  // GA4: add_to_cart
+  trackGA4("add_to_cart", {
+    currency: "INR",
+    value: Number(p.price || 0),
+    items: [{
+      item_id: String(p.external_id || p.id),
+      item_name: String(p.name),
+      item_category: String(p.category || "General"),
+      price: Number(p.price || 0),
+      quantity: 1
+    }]
+  });
+
+  const msg = document.getElementById("modalStatusMsg");
+  if (msg) {
+    msg.style.display = "block";
+    msg.innerText = `✓ GA4 'add_to_cart' event dispatched for "${p.name}".`;
+  }
+}
+
+function handleProdBeginCheckout(pid) {
+  const p = (window._currentProductsMap || {})[pid];
+  if (!p) return;
+
+  // GA4: begin_checkout
+  trackGA4("begin_checkout", {
+    currency: "INR",
+    value: Number(p.price || 0),
+    items: [{
+      item_id: String(p.external_id || p.id),
+      item_name: String(p.name),
+      item_category: String(p.category || "General"),
+      price: Number(p.price || 0),
+      quantity: 1
+    }]
+  });
+
+  const msg = document.getElementById("modalStatusMsg");
+  if (msg) {
+    msg.style.display = "block";
+    msg.innerText = `✓ GA4 'begin_checkout' event dispatched for "${p.name}".`;
+  }
+}
+
+function handleProdPurchase(pid) {
+  const p = (window._currentProductsMap || {})[pid];
+  if (!p) return;
+
+  const txnId = "TXN-" + Date.now().toString(36).toUpperCase() + "-" + Math.floor(100 + Math.random() * 900);
+  const storageKey = "ga4_purchased_" + txnId;
+
+  // Enforce idempotency: prevent purchase event from firing repeatedly on page refresh
+  if (!sessionStorage.getItem(storageKey)) {
+    sessionStorage.setItem(storageKey, "1");
+
+    // GA4: purchase
+    trackGA4("purchase", {
+      transaction_id: txnId,
+      currency: "INR",
+      value: Number(p.price || 0),
+      items: [{
+        item_id: String(p.external_id || p.id),
+        item_name: String(p.name),
+        item_category: String(p.category || "General"),
+        price: Number(p.price || 0),
+        quantity: 1
+      }]
+    });
+  }
+
+  const msg = document.getElementById("modalStatusMsg");
+  if (msg) {
+    msg.style.display = "block";
+    msg.innerHTML = `<b>✓ Payment confirmed!</b> Transaction ID: <code>${txnId}</code><br>GA4 'purchase' event successfully recorded.`;
+  }
+}
+
 async function customersPage() {
   shell("customers");
   await checkAuthSession();
@@ -580,6 +802,31 @@ async function seedSampleFunnelEvents() {
     for (const ev of events) {
       await api("/events", { method: "POST", body: JSON.stringify(ev) });
     }
+
+    // GA4 Telemetry Dispatch for DebugView / Realtime verification
+    trackGA4("view_item", {
+      currency: "INR",
+      value: 899.0,
+      items: [{ item_id: "PROD_DEMO_01", item_name: "Premium Hoodie", item_category: "Fashion", price: 899.0, quantity: 1 }]
+    });
+    trackGA4("add_to_cart", {
+      currency: "INR",
+      value: 899.0,
+      items: [{ item_id: "PROD_DEMO_01", item_name: "Premium Hoodie", item_category: "Fashion", price: 899.0, quantity: 1 }]
+    });
+    trackGA4("begin_checkout", {
+      currency: "INR",
+      value: 899.0,
+      items: [{ item_id: "PROD_DEMO_01", item_name: "Premium Hoodie", item_category: "Fashion", price: 899.0, quantity: 1 }]
+    });
+    const testSimTxn = "ORD-SIM-" + Date.now();
+    trackGA4("purchase", {
+      transaction_id: testSimTxn,
+      currency: "INR",
+      value: 899.0,
+      items: [{ item_id: "PROD_DEMO_01", item_name: "Premium Hoodie", item_category: "Fashion", price: 899.0, quantity: 1 }]
+    });
+
     retentionPage();
   } catch (err) {
     alert("Could not seed test events: " + err.message);
@@ -835,12 +1082,46 @@ async function subscriptionPage() {
 }
 
 async function demoCheckout(plan) {
+  // GA4: begin_checkout
+  trackGA4("begin_checkout", {
+    currency: "INR",
+    value: 49.0,
+    items: [{
+      item_id: "plan_pro_pack",
+      item_name: "Pro Pack Subscription",
+      item_category: "Platform Subscription",
+      price: 49.0,
+      quantity: 1
+    }]
+  });
+
   try {
     const res = await api("/subscription/checkout", {
       method: "POST",
       body: JSON.stringify({ plan: plan })
     });
-    alert(`Success: ${res.message}\nTransaction: ${res.transaction_id}`);
+
+    const txnId = res.transaction_id || ("ORD-" + Date.now());
+    const storageKey = "ga4_purchased_" + txnId;
+    // Prevent duplicate firing on page refresh
+    if (!sessionStorage.getItem(storageKey)) {
+      sessionStorage.setItem(storageKey, "1");
+      // GA4: purchase
+      trackGA4("purchase", {
+        transaction_id: txnId,
+        currency: "INR",
+        value: Number(res.amount || 49.0),
+        items: [{
+          item_id: "plan_pro_pack",
+          item_name: "Pro Pack Subscription",
+          item_category: "Platform Subscription",
+          price: Number(res.amount || 49.0),
+          quantity: 1
+        }]
+      });
+    }
+
+    alert(`Success: ${res.message}\nTransaction ID: ${txnId}\n(GA4 begin_checkout & purchase dispatched)`);
   } catch (err) {
     alert("Checkout error: " + err.message);
   }

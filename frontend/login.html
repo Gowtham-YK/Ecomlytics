@@ -324,7 +324,18 @@ document.getElementById('authForm').addEventListener('submit', async function(e)
     };
     localStorage.setItem('ecomlytics_user', JSON.stringify(userProfile));
 
-    window.location.href = '/index.html';
+    // GA4 Telemetry: Track sign_up and login (No PII)
+    if (typeof gtag === 'function') {
+      if (currentMode === 'signup') {
+        gtag('event', 'sign_up', { method: 'email' });
+      } else {
+        gtag('event', 'login', { method: 'email' });
+      }
+    }
+
+    setTimeout(() => {
+      window.location.href = '/index.html';
+    }, 150);
   } catch (err) {
     submitBtn.disabled = false;
     submitBtn.innerText = originalBtnText;
