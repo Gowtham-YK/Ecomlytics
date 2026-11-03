@@ -1,0 +1,165 @@
+"""
+Product analytics adapter for Ecomlytics.
+
+Every event is persisted in Ecomlytics first, then best-effort forwarded to
+Mixpanel, PostHog and Amplitude using their server-side HTTP ingestion APIs.
+Provider credentials stay on the server and missing providers remain optional.
+"""
+
+import base64
+import json
+import sqlite3
+import time
+import uuid
+from typing import Dict, Any, Optional
+
+import httpx
+import config
+from analytics.funnel import record_event
+
+
+# Only these non-sensitive properties are forwarded to third-party providers.
+# User email, names, passwords, payment credentials and raw customer/order data
+# are deliberately excluded. Extend this list only after a privacy review.
+SAFE_EVENT_PROPERTIES = {
+    "page_path", "page_name", "dataset_type", "filter_days", "plan_name",
+    "plan_id", "billing_cycle", "amount", "currency", "is_demo",
+    "insight_type", "feature_name", "source", "report_type", "file_format",
+    "success", "environment", "platform", "event_category", "error_code",
+    "item_count", "imported_rows", "skipped_rows", "rejected_rows",
+    "target_plan", "current_plan", "checkout_type", "session_id",
+    "product_id", "product_category", "item_price", "quantity"
+}
+
+
+def _safe_properties(properties: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Return allowlisted scalar properties; never forward nested/raw records."""
+    safe: Dict[str, Any] = {}
+    for key, value in (properties or {}).items():
+        if key not in SAFE_EVENT_PROPERTIES:
+            continue
+        if value is None or isinstance(value, (str, int, float, bool)):
+            if isinstance(value, str):
+                safe[key] = value[:200]
+            else:
+                safe[key] = value
+    return safe
+
+
+def provider_statuses() -> list:
+    """Return truthful configuration status for all supported providers."""
+    providers = [
+        {
+            "id": "mixpanel", "name": "Mixpanel",
+            "configured": bool(config.MIXPANEL_PROJECT_TOKEN),
+            "message": "Server-side event forwarding is configured." if config.MIXPANEL_PROJECT_TOKEN else "Set MIXPANEL_PROJECT_TOKEN in the Render environment to enable event forwarding.",
+        },
+        {
+            "id": "posthog", "name": "PostHog",
+            "configured": bool(config.POSTHOG_API_KEY),
+            "message": "Server-side event forwarding is configured." if config.POSTHOG_API_KEY else "Set POSTHOG_API_KEY in the Render environment to enable event forwarding.",
+        },
+        {
+            "id": "amplitude", "name": "Amplitude",
+            "configured": bool(config.AMPLITUDE_API_KEY),
+            "message": "Server-side event forwarding is configured." if config.AMPLITUDE_API_KEY else "Set AMPLITUDE_API_KEY in the Render environment to enable event forwarding.",
+        },
+    ]
+    for provider in providers:
+        provider["state"] = "connected" if provider["configured"] else "not_configured"
+        provider["last_synced"] = None
+    return providers
+
+
+def get_analytics_status() -> Dict[str, Any]:
+    """Backward-compatible summary of the PostHog connection."""
+    posthog = next(p for p in provider_statuses() if p["id"] == "posthog")
+    return {
+        "platform": "PostHog",
+        "configured": posthog["configured"],
+        "host": config.POSTHOG_HOST if posthog["configured"] else None,
+        "mode": "live" if posthog["configured"] else "first_party_only",
+        "free_tier_allowance": "See current PostHog plan and usage limits"
+    }
+
+
+def _forward_mixpanel(event_name: str, distinct_id: str, event_id: str,
+                      workspace_id: str, session_id: Optional[str], props: Dict[str, Any]) -> None:
+    if not config.MIXPANEL_PROJECT_TOKEN:
+        return
+    event = {
+        "event": event_name,
+        "properties": {
+            **props, "token": config.MIXPANEL_PROJECT_TOKEN,
+            "distinct_id": distinct_id, "time": int(time.time()),
+            "$insert_id": event_id, "workspace_id": workspace_id,
+            "session_id": session_id or "", "$lib": "ecomlytics-server"
+        }
+    }
+    encoded = base64.b64encode(json.dumps(event, separators=(",", ":")).encode()).decode()
+    response = httpx.post("https://api.mixpanel.com/track?ip=0", data=encoded, timeout=1.5)
+    response.raise_for_status()
+
+
+def _forward_posthog(event_name: str, distinct_id: str, event_id: str,
+                     workspace_id: str, session_id: Optional[str], props: Dict[str, Any]) -> None:
+    if not config.POSTHOG_API_KEY:
+        return
+    payload = {
+        "api_key": config.POSTHOG_API_KEY,
+        "event": event_name,
+        "distinct_id": distinct_id,
+        "properties": {
+            **props, "workspace_id": workspace_id, "session_id": session_id,
+            "$insert_id": event_id, "$lib": "ecomlytics-server"
+        }
+    }
+    response = httpx.post(f"{config.POSTHOG_HOST}/capture/", json=payload, timeout=1.5)
+    response.raise_for_status()
+
+
+def _forward_amplitude(event_name: str, distinct_id: str, event_id: str,
+                       workspace_id: str, session_id: Optional[str], props: Dict[str, Any]) -> None:
+    if not config.AMPLITUDE_API_KEY:
+        return
+    event = {
+        "user_id": distinct_id,
+        "device_id": session_id or distinct_id,
+        "event_type": event_name,
+        "time": int(time.time() * 1000),
+        "insert_id": event_id,
+        "event_properties": {**props, "workspace_id": workspace_id, "session_id": session_id},
+    }
+    response = httpx.post(
+        config.AMPLITUDE_INGEST_URL,
+        json={"api_key": config.AMPLITUDE_API_KEY, "events": [event]},
+        timeout=1.5
+    )
+    response.raise_for_status()
+
+
+def track_product_event(
+    conn: sqlite3.Connection,
+    workspace_id: str,
+    event_name: str,
+    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    properties: Optional[Dict[str, Any]] = None
+) -> str:
+    """Persist once in the first-party store, then best-effort fan out."""
+    safe_props = _safe_properties(properties)
+    event_id = record_event(
+        conn=conn, workspace_id=workspace_id, event_name=event_name,
+        user_id=user_id, session_id=session_id, properties=safe_props
+    )
+    conn.commit()
+
+    distinct_id = str(user_id or session_id or "anonymous")
+    for forwarder in (_forward_mixpanel, _forward_posthog, _forward_amplitude):
+        try:
+            forwarder(event_name, distinct_id, event_id, workspace_id, session_id, safe_props)
+        except Exception:
+            # Vendor outage, invalid credentials or network blocking must not
+            # interrupt authentication, imports, checkout or analytics pages.
+            continue
+    return event_id

@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+gunicorn
+razorpay
+pandas
+numpy
+python-dotenv
+httpx
