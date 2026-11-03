@@ -32,9 +32,12 @@ def razorpay_configured() -> bool:
     return bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)
 
 
-# Product analytics providers (server-side credentials; never expose these to browsers).
+# Product analytics providers (all optional; server-side credentials only).
 MIXPANEL_PROJECT_TOKEN = os.environ.get("MIXPANEL_PROJECT_TOKEN", "").strip()
-POSTHOG_API_KEY = os.environ.get("POSTHOG_API_KEY", "").strip()
+POSTHOG_PROJECT_TOKEN = (
+    os.environ.get("POSTHOG_PROJECT_TOKEN", "").strip()
+    or os.environ.get("POSTHOG_API_KEY", "").strip()
+)
 POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com").rstrip("/")
 AMPLITUDE_API_KEY = os.environ.get("AMPLITUDE_API_KEY", "").strip()
 AMPLITUDE_INGEST_URL = os.environ.get(

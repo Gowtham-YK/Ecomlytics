@@ -129,7 +129,7 @@ function getAnalyticsSessionId() {
 
 // Sends product usage events to Ecomlytics' first-party event store. The
 // FastAPI adapter forwards allowlisted, non-sensitive properties to any
-// configured Mixpanel, PostHog and Amplitude projects.
+// configured PostHog project.
 function hasAnalyticsConsent() {
   return localStorage.getItem("ecomlytics_analytics_consent") === "granted";
 }
