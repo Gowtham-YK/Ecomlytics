@@ -46,6 +46,7 @@ async function checkAuthSession() {
     const workspaces = user.workspaces || [];
     const activeWs = workspaces.find(w => w.id === currentStored.workspace_id) || workspaces[0] || { id: "ws_default", name: "My Store" };
     
+    const persistedPlan = localStorage.getItem("ecomlytics_plan") || currentStored.plan || user.plan || "free";
     const profile = {
       id: user.id,
       name: user.display_name,
@@ -53,7 +54,7 @@ async function checkAuthSession() {
       workspace_id: activeWs.id,
       company: activeWs.name,
       workspaces: workspaces,
-      plan: "free"
+      plan: persistedPlan
     };
     localStorage.setItem("ecomlytics_user", JSON.stringify(profile));
     if (typeof window.identifyUser === "function") {
@@ -1102,7 +1103,7 @@ async function subscriptionPage() {
   const content = document.getElementById("content");
 
   const u = getUserSession() || {};
-  const isPro = u.plan === "pro";
+  const isPro = (u.plan === "pro" || localStorage.getItem("ecomlytics_plan") === "pro");
 
   content.innerHTML = header("Plans & Billing", "Choose the right decision intelligence tier for your business") + `
   <div class="billing-hero">
@@ -1111,11 +1112,13 @@ async function subscriptionPage() {
       <h2>Upgrade Your Decision Intelligence</h2>
       <p>Unlock cohort retention analysis, automated business insights, and external data integration pipelines.</p>
     </div>
-    <div class="billing-status">Current: ${isPro ? "Pro Pack Active" : "Free Active"}</div>
+    <div id="billingHeroStatus" class="billing-status ${isPro ? "pro-active" : ""}">
+      ${isPro ? "Current: Pro Pack Active ✓" : "Current: Free Active"}
+    </div>
   </div>
 
   <div class="pricing-grid" style="margin-top:24px">
-    <div class="pricing-card current">
+    <div id="cardFreeTier" class="pricing-card ${isPro ? "" : "current"}">
       <div class="pricing-top">
         <div class="plan-name">Free Tier</div>
         <p>Essential sales & product analytics for emerging stores.</p>
@@ -1128,11 +1131,11 @@ async function subscriptionPage() {
         <li><span>✓</span> Customer segmentation</li>
         <li><span>✓</span> Event-driven purchase funnel</li>
       </ul>
-      <button class="btn secondary-btn" disabled>Current Active Plan</button>
+      <button class="btn secondary-btn" disabled>${isPro ? "Included in Pro" : "Current Active Plan"}</button>
     </div>
 
-    <div class="pricing-card featured">
-      <div class="featured-label">RECOMMENDED</div>
+    <div id="cardProPack" class="pricing-card featured ${isPro ? "current" : ""}">
+      <div class="featured-label">${isPro ? "ACTIVE PLAN" : "RECOMMENDED"}</div>
       <div class="pricing-top">
         <div class="plan-name">Pro Pack</div>
         <p>Complete multi-period cohort retention and automated insight intelligence.</p>
@@ -1146,7 +1149,7 @@ async function subscriptionPage() {
         <li><span>✓</span> Unlimited CSV imports & idempotency</li>
         <li><span>✓</span> PostHog & Google Analytics integration</li>
       </ul>
-      ${isPro ? '<button class="btn secondary-btn" disabled>Active Plan</button>' : '<button class="btn" onclick="demoCheckout(\'pro\')">Upgrade to Pro Pack</button>'}
+      ${isPro ? '<button class="btn secondary-btn" disabled style="background:#22c55e;border:none;color:#ffffff;font-weight:700;cursor:default;">Active Plan ✓</button>' : '<button id="btnUpgradePro" class="btn" onclick="demoCheckout(\'pro\')">Upgrade to Pro Pack</button>'}
     </div>
   </div>`;
 }
@@ -1211,13 +1214,39 @@ async function demoCheckout(plan) {
       });
     }
 
-    // Update active plan in session
+    // Update and persist active plan in session & localStorage
+    localStorage.setItem("ecomlytics_plan", "pro");
     const u = getUserSession() || {};
     u.plan = "pro";
     localStorage.setItem("ecomlytics_user", JSON.stringify(u));
 
+    // Immediate dynamic DOM update for seamless visual transition
+    const badge = document.getElementById("billingHeroStatus") || document.querySelector(".billing-status");
+    if (badge) {
+      badge.textContent = "Current: Pro Pack Active ✓";
+      badge.className = "billing-status pro-active";
+    }
+
+    const freeCard = document.getElementById("cardFreeTier");
+    if (freeCard) {
+      freeCard.classList.remove("current");
+      const freeBtn = freeCard.querySelector("button");
+      if (freeBtn) freeBtn.textContent = "Included in Pro";
+    }
+
+    const proCard = document.getElementById("cardProPack");
+    if (proCard) {
+      proCard.classList.add("current");
+      const label = proCard.querySelector(".featured-label");
+      if (label) label.textContent = "ACTIVE PLAN";
+      const proBtn = proCard.querySelector("button");
+      if (proBtn) {
+        proBtn.outerHTML = '<button class="btn secondary-btn" disabled style="background:#22c55e;border:none;color:#ffffff;font-weight:700;cursor:default;">Active Plan ✓</button>';
+      }
+    }
+
     alert(`Payment Successful!\nYour Pro Pack subscription is now active.\nTransaction ID: ${txnId}`);
-    setTimeout(() => subscriptionPage(), 400);
+    subscriptionPage();
   } catch (err) {
     alert("Unable to process request: " + err.message);
   }
