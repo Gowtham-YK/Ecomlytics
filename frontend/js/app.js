@@ -56,6 +56,7 @@ async function checkAuthSession() {
       plan: "free"
     };
     localStorage.setItem("ecomlytics_user", JSON.stringify(profile));
+    ensureAnalyticsConsentBanner();
 
     const pendingAuthEvent = sessionStorage.getItem("ecomlytics_pending_auth_event");
     if (pendingAuthEvent) {
@@ -66,7 +67,13 @@ async function checkAuthSession() {
       window.__ecomlyticsPageViewTracked = true;
       const pageName = document.body.dataset.page || "application";
       trackProductEvent("page_viewed", { page_name: pageName });
-      if (pageName === "overview") trackProductEvent("dashboard_viewed", { page_name: pageName });
+      if (pageName === "overview") {
+        trackProductEvent("dashboard_viewed", { page_name: pageName });
+        trackProductEvent("first_dashboard_viewed", {
+          dashboard_name: "overview",
+          data_freshness_state: "loaded"
+        });
+      }
     }
     return profile;
   } catch (err) {
@@ -123,11 +130,33 @@ function getAnalyticsSessionId() {
 // Sends product usage events to Ecomlytics' first-party event store. The
 // FastAPI adapter forwards allowlisted, non-sensitive properties to any
 // configured Mixpanel, PostHog and Amplitude projects.
+function hasAnalyticsConsent() {
+  return localStorage.getItem("ecomlytics_analytics_consent") === "granted";
+}
+
+function ensureAnalyticsConsentBanner() {
+  if (hasAnalyticsConsent() || localStorage.getItem("ecomlytics_analytics_consent") === "denied") return;
+  if (document.getElementById("ecomlytics-consent-banner")) return;
+  const banner = document.createElement("div");
+  banner.id = "ecomlytics-consent-banner";
+  banner.style.cssText = "position:fixed;z-index:9999;left:16px;right:16px;bottom:16px;max-width:760px;margin:auto;background:#fff;border:1px solid #dbe3ee;border-radius:12px;box-shadow:0 8px 30px rgba(15,23,42,.16);padding:16px;display:flex;gap:14px;align-items:center;justify-content:space-between;font:13px/1.5 Arial,sans-serif;color:#334155";
+  banner.innerHTML = '<span>May Ecomlytics collect product-usage analytics to improve onboarding and the platform? You can change this choice by clearing your site preference.</span><span style="display:flex;gap:8px;flex-shrink:0"><button id="ecomlytics-consent-no" type="button" style="padding:8px 12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;cursor:pointer">Decline</button><button id="ecomlytics-consent-yes" type="button" style="padding:8px 12px;border:0;border-radius:7px;background:#2563eb;color:#fff;cursor:pointer">Allow</button></span>';
+  document.body.appendChild(banner);
+  document.getElementById("ecomlytics-consent-yes").addEventListener("click", () => {
+    localStorage.setItem("ecomlytics_analytics_consent", "granted");
+    banner.remove();
+  });
+  document.getElementById("ecomlytics-consent-no").addEventListener("click", () => {
+    localStorage.setItem("ecomlytics_analytics_consent", "denied");
+    banner.remove();
+  });
+}
+
 async function trackProductEvent(eventName, properties = {}) {
   try {
     const token = sessionStorage.getItem("ecomlytics_token");
     const user = getUserSession();
-    if (!token || !user) return;
+    if (!token || !user || !hasAnalyticsConsent()) return;
     const headers = { "Content-Type": "application/json", "Authorization": "Bearer " + token };
     if (user.workspace_id) headers["X-Workspace-ID"] = user.workspace_id;
     const response = await fetch(API + "/events", {
@@ -139,7 +168,8 @@ async function trackProductEvent(eventName, properties = {}) {
           ...properties, page_path: window.location.pathname,
           environment: window.location.hostname === "localhost" ? "development" : "production",
           platform: "web"
-        }
+        },
+        analytics_consent: true
       })
     });
     if (!response.ok) console.warn("Product analytics event was not accepted:", eventName);
@@ -920,6 +950,12 @@ async function insightsPage() {
   try {
     const data = await api("/insights");
     const insights = data.insights || [];
+    if (data.status === "available" && insights.length > 0) {
+      trackProductEvent("first_analyzed_results_achieved", {
+        analysis_type: "business_insights",
+        data_ready_mode: "workspace_data"
+      });
+    }
 
     if (!insights.length) {
       content.innerHTML = header("Business Insights", "Algorithmic decision support and automated findings") + `
@@ -1092,6 +1128,12 @@ async function handleCsvFileSelected(file) {
       trackProductEvent("csv_import_completed", {
         dataset_type: datasetType, imported_rows: sm.imported_rows,
         skipped_rows: sm.skipped_rows, rejected_rows: sm.rejected_rows, success: true
+      });
+      trackProductEvent("setup_step_completed", {
+        setup_step_name: "first_csv_import",
+        integration_name: "csv_import",
+        step_success: true,
+        step_order_number: 1
       });
       msgEl.innerHTML = `
       <div class="card" style="background:#f0fdf4;border:1px solid #bbf7d0;padding:14px;margin-top:10px">

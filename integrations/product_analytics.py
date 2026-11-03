@@ -28,7 +28,19 @@ SAFE_EVENT_PROPERTIES = {
     "success", "environment", "platform", "event_category", "error_code",
     "item_count", "imported_rows", "skipped_rows", "rejected_rows",
     "target_plan", "current_plan", "checkout_type", "session_id",
-    "product_id", "product_category", "item_price", "quantity"
+    "product_id", "product_category", "item_price", "quantity",
+    # Mixpanel onboarding / activation event properties (no direct identifiers).
+    "plan_tier", "signup_channel", "company_size", "timestamp_source",
+    "inviter_role", "invite_source", "has_existing_shop_connection",
+    "integration_name", "integration_type", "auth_flow", "connection_method",
+    "scopes_granted_count", "time_to_connect_seconds", "failure_reason",
+    "retry_attempt_count", "setup_step_name", "step_success",
+    "step_order_number", "total_integrations_connected",
+    "time_to_first_integration_seconds", "dashboard_name",
+    "data_freshness_state", "integrations_connected_count",
+    "time_to_first_dashboard_seconds", "delivery_mode", "integrations_used",
+    "time_to_first_results_seconds", "successful_integrations_count",
+    "analysis_type", "data_ready_mode"
 }
 
 
@@ -43,6 +55,9 @@ def _safe_properties(properties: Optional[Dict[str, Any]]) -> Dict[str, Any]:
                 safe[key] = value[:200]
             else:
                 safe[key] = value
+        elif key == "integrations_used" and isinstance(value, list):
+            # The tracking plan defines this field as a list of integration names.
+            safe[key] = [item[:100] for item in value if isinstance(item, str)][:20]
     return safe
 
 

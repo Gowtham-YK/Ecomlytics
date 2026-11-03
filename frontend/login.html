@@ -124,6 +124,12 @@
      <a href="#" onclick="alert('Password reset link has been sent to your email if registered.');return false;">Forgot password?</a>
     </div>
 
+    <div class="field" style="margin:14px 0 4px">
+     <label style="display:flex;align-items:flex-start;gap:8px;font-weight:500;line-height:1.45">
+      <input id="analyticsConsent" type="checkbox" style="margin-top:3px">
+      <span>Allow Ecomlytics to collect product-usage analytics to improve onboarding and the platform. This is optional.</span>
+     </label>
+    </div>
     <button class="btn login-btn" type="submit" id="submitBtn">Sign in to Ecomlytics</button>
    </form>
 
@@ -139,6 +145,10 @@
 
 <script>
 let currentMode = 'signin';
+document.addEventListener('DOMContentLoaded', () => {
+  const consent = document.getElementById('analyticsConsent');
+  if (consent) consent.checked = localStorage.getItem('ecomlytics_analytics_consent') === 'granted';
+});
 
 function switchAuthMode(mode) {
   currentMode = mode;
@@ -254,6 +264,7 @@ document.getElementById('authForm').addEventListener('submit', async function(e)
   const password = passwordInput.value;
   const fullName = nameInput.value.trim();
   const company = companyInput.value.trim();
+  const analyticsConsent = document.getElementById('analyticsConsent').checked;
 
   let hasError = false;
 
@@ -288,7 +299,7 @@ document.getElementById('authForm').addEventListener('submit', async function(e)
   try {
     let endpoint = currentMode === 'signup' ? '/api/auth/register' : '/api/auth/login';
     let payload = currentMode === 'signup'
-      ? { email: email, password: password, display_name: fullName, workspace_name: company || (fullName + "'s Store") }
+      ? { email: email, password: password, display_name: fullName, workspace_name: company || (fullName + "'s Store"), analytics_consent: analyticsConsent }
       : { email: email, password: password };
 
     const response = await fetch(endpoint, {
@@ -311,6 +322,9 @@ document.getElementById('authForm').addEventListener('submit', async function(e)
       else passwordInput.classList.add('input-error');
       return;
     }
+
+    // Persist the user's explicit analytics choice for this browser.
+    localStorage.setItem('ecomlytics_analytics_consent', analyticsConsent ? 'granted' : 'denied');
 
     // Success: store session profile and token
     if (data.token) {

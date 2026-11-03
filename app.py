@@ -57,6 +57,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8)
     display_name: str
     workspace_name: Optional[str] = None
+    analytics_consent: bool = False
 
 class LoginRequest(BaseModel):
     email: str = Field(min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -71,6 +72,7 @@ class EventRequest(BaseModel):
     event_name: str
     session_id: Optional[str] = None
     properties: Optional[Dict[str, Any]] = None
+    analytics_consent: bool = False
 
 # ============================================================
 # AUTHENTICATION API ROUTES
@@ -93,6 +95,24 @@ def api_register(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    conn.commit()
+
+    # Account creation is a server-confirmed milestone. Only send it when the
+    # user explicitly opted into analytics on the registration form.
+    if req.analytics_consent:
+        product_analytics.track_product_event(
+            conn=conn,
+            workspace_id=user_data["workspace"]["id"],
+            event_name="account_signed_up",
+            user_id=user_data["id"],
+            session_id=None,
+            properties={
+                "plan_tier": "free",
+                "signup_channel": "web",
+                "timestamp_source": "server"
+            }
+        )
 
     token = create_session_token(user_data["id"])
     response.set_cookie(
@@ -377,7 +397,29 @@ def api_track_event(
     current_user: Dict[str, Any] = Depends(get_current_user),
     conn: sqlite3.Connection = Depends(get_db_session)
 ):
-    """Captures first-party product usage events."""
+    """Captures first-party product usage events only after explicit consent."""
+    if not req.analytics_consent:
+        return {"success": False, "reason": "analytics_consent_not_granted"}
+
+    # First-milestone events are idempotent per user/workspace. Repeated page
+    # loads or retries must not inflate activation counts.
+    first_milestones = {
+        "first_dashboard_viewed",
+        "first_integration_connected",
+        "first_analyzed_results_achieved"
+    }
+    if req.event_name in first_milestones:
+        existing = conn.execute(
+            """
+            SELECT id FROM product_events
+            WHERE workspace_id = ? AND user_id = ? AND event_name = ?
+            LIMIT 1
+            """,
+            (workspace["id"], current_user["id"], req.event_name)
+        ).fetchone()
+        if existing:
+            return {"success": True, "duplicate": True, "event_id": existing["id"]}
+
     event_id = product_analytics.track_product_event(
         conn=conn,
         workspace_id=workspace["id"],
