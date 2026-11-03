@@ -41,6 +41,13 @@ POSTHOG_HOST = (
 )
 POSTHOG_PROJECT_ID = os.environ.get("POSTHOG_PROJECT_ID", "")
 
+# Mixpanel Product Analytics Configuration
+MIXPANEL_PROJECT_TOKEN = (
+    os.environ.get("MIXPANEL_PROJECT_TOKEN")
+    or os.environ.get("NEXT_PUBLIC_MIXPANEL_TOKEN")
+    or ""
+)
+
 
 def google_analytics_configured() -> bool:
     """True only if real GA4 OAuth credentials are present."""
@@ -55,3 +62,8 @@ def razorpay_configured() -> bool:
 def posthog_configured() -> bool:
     """True only if real PostHog project token is present."""
     return bool(POSTHOG_API_KEY and POSTHOG_API_KEY.strip())
+
+
+def mixpanel_configured() -> bool:
+    """True only if real Mixpanel project token is present."""
+    return bool(MIXPANEL_PROJECT_TOKEN and MIXPANEL_PROJECT_TOKEN.strip())

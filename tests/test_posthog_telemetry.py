@@ -28,6 +28,7 @@ def test_db(tmp_path: Path):
 def test_posthog_configuration_detection():
     """Verifies that PostHog configuration status detects API key properly."""
     assert config.posthog_configured() is True
+    assert config.mixpanel_configured() is True
     status = product_analytics.get_analytics_status()
     assert status["platform"] == "PostHog"
     assert status["configured"] is True

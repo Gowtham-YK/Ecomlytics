@@ -1,5 +1,5 @@
 /**
- * Ecomlytics Product Telemetry & Analytics Module (PostHog & GA4)
+ * Ecomlytics Product Telemetry & Analytics Module (PostHog, Mixpanel & GA4)
  * Measures platform adoption, user funnels, and feature usage.
  * Privacy-first: masks sensitive inputs, excludes customer data/passwords.
  */
@@ -54,60 +54,112 @@
       (e.__SV = 1.0));
   })(document, window.posthog || []);
 
+  // 2. Official Mixpanel Web SDK snippet
+  !(function (f, b) {
+    if (!b.__SV) {
+      var e, g, i, h;
+      window.mixpanel = b;
+      b._i = [];
+      b.init = function (e, f, c) {
+        function d(a, b) {
+          var c = b.split(".");
+          2 == c.length && ((a = a[c[0]]), (b = c[1]));
+          a[b] = function () {
+            a.push([b].concat(Array.prototype.slice.call(arguments, 0)));
+          };
+        }
+        var a = b;
+        "undefined" !== typeof c ? (a = b[c] = []) : (c = "mixpanel");
+        a.people = a.people || [];
+        a.toString = function (a) {
+          var d = "mixpanel";
+          "mixpanel" !== c && (d += "." + c);
+          a || (d += " (stub)");
+          return d;
+        };
+        a.people.toString = function () {
+          return a.toString(1) + ".people (stub)";
+        };
+        i =
+          "disable time_event track track_pageview track_links track_forms track_with_groups add_group set_group remove_group register register_once alias unregister identify name_tag set_config reset opt_in_tracking opt_out_tracking has_opted_in_tracking has_opted_out_tracking clear_opt_in_out_tracking start_batch_senders people.set people.set_once people.unset people.increment people.append people.union people.track_charge people.clear_charges people.delete_user people.remove".split(
+            " "
+          );
+        for (h = 0; h < i.length; h++) d(a, i[h]);
+        b._i.push([e, f, c]);
+      };
+      b.__SV = 1.2;
+      e = f.createElement("script");
+      e.type = "text/javascript";
+      e.async = !0;
+      e.src = "https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js";
+      g = f.getElementsByTagName("script")[0];
+      g.parentNode.insertBefore(e, g);
+    }
+  })(document, window.mixpanel || []);
+
   let isInitialized = false;
 
-  // Initialize PostHog from API or local fallback
-  async function initPostHog() {
+  // Initialize Telemetry Providers (PostHog & Mixpanel)
+  async function initTelemetry() {
     if (isInitialized) return;
 
-    let token = null;
-    let host = "https://us.i.posthog.com";
+    let phToken = null;
+    let phHost = "https://us.i.posthog.com";
+    let mpToken = null;
 
     try {
       const resp = await fetch("/api/telemetry/config");
       if (resp.ok) {
         const cfg = await resp.json();
         if (cfg.posthog_enabled && cfg.posthog_token) {
-          token = cfg.posthog_token;
-          host = cfg.posthog_host || host;
+          phToken = cfg.posthog_token;
+          phHost = cfg.posthog_host || phHost;
+        }
+        if (cfg.mixpanel_enabled && cfg.mixpanel_token) {
+          mpToken = cfg.mixpanel_token;
         }
       }
     } catch (e) {
-      // Offline or network error - continue silently
+      // Offline fallback
     }
 
-    // Fallback to configured token if API unavailable
-    if (!token && window.__POSTHOG_TOKEN__) {
-      token = window.__POSTHOG_TOKEN__;
-      host = window.__POSTHOG_HOST__ || host;
+    // 1. PostHog Init
+    if (phToken) {
+      try {
+        window.posthog.init(phToken, {
+          api_host: phHost,
+          person_profiles: "identified_only",
+          autocapture: false,
+          capture_pageview: true,
+          session_recording: {
+            maskAllInputs: true,
+            maskTextSelector: ".sensitive, [data-sensitive], input, textarea"
+          },
+          loaded: function () {
+            console.log("[Telemetry] PostHog initialized successfully.");
+            syncStoredSession();
+          }
+        });
+      } catch (err) {
+        console.warn("[Telemetry] PostHog init error:", err);
+      }
     }
 
-    if (!token) {
-      console.log("[Telemetry] PostHog not configured (stub mode active).");
-      return;
+    // 2. Mixpanel Init
+    if (mpToken) {
+      try {
+        window.mixpanel.init(mpToken, {
+          track_pageview: true,
+          persistence: "localStorage"
+        });
+        console.log("[Telemetry] Mixpanel initialized successfully.");
+        syncStoredSession();
+      } catch (err) {
+        console.warn("[Telemetry] Mixpanel init error:", err);
+      }
     }
 
-    try {
-      window.posthog.init(token, {
-        api_host: host,
-        person_profiles: "identified_only", // Privacy: do not create anonymous profiles
-        autocapture: false, // Explicit events preferred over noisy autocapture
-        capture_pageview: true, // Record page view once per navigation
-        session_recording: {
-          maskAllInputs: true, // Privacy: mask text & inputs in session replays
-          maskTextSelector: ".sensitive, [data-sensitive], input, textarea"
-        },
-        loaded: function (ph) {
-          isInitialized = true;
-          console.log("[Telemetry] PostHog initialized successfully for Ecomlytics.");
-          // Re-associate stored session if user is logged in
-          syncStoredSession();
-        }
-      });
-      isInitialized = true;
-    } catch (err) {
-      console.warn("[Telemetry] PostHog initialization error:", err);
-    }
+    isInitialized = true;
   }
 
   function syncStoredSession() {
@@ -122,21 +174,34 @@
     } catch (e) {}
   }
 
-  // Identify authenticated store owner with stable internal user ID (never email as distinct ID)
+  // Identify authenticated store owner with stable internal user ID
   window.identifyUser = function (user) {
     if (!user || !user.id) return;
+    const uid = String(user.id);
+    const userProps = {
+      workspace_id: user.workspace_id || "",
+      plan: user.plan || "free",
+      role: "owner"
+    };
+
+    // PostHog
     try {
       if (window.posthog && typeof window.posthog.identify === "function") {
-        window.posthog.identify(String(user.id), {
-          workspace_id: user.workspace_id || "",
-          plan: user.plan || "free",
-          role: "owner"
-        });
-        console.log(`[Telemetry] User identified: ${user.id} (Workspace: ${user.workspace_id})`);
+        window.posthog.identify(uid, userProps);
       }
-    } catch (e) {
-      console.warn("[Telemetry] Identify error:", e);
-    }
+    } catch (e) {}
+
+    // Mixpanel
+    try {
+      if (window.mixpanel && typeof window.mixpanel.identify === "function") {
+        window.mixpanel.identify(uid);
+        if (window.mixpanel.people && typeof window.mixpanel.people.set === "function") {
+          window.mixpanel.people.set(userProps);
+        }
+      }
+    } catch (e) {}
+
+    console.log(`[Telemetry] User identified: ${uid} (Workspace: ${user.workspace_id})`);
   };
 
   // Reset user identity on logout
@@ -144,32 +209,44 @@
     try {
       if (window.posthog && typeof window.posthog.reset === "function") {
         window.posthog.reset();
-        console.log("[Telemetry] PostHog session reset on logout.");
       }
-    } catch (e) {
-      console.warn("[Telemetry] Reset error:", e);
-    }
+    } catch (e) {}
+
+    try {
+      if (window.mixpanel && typeof window.mixpanel.reset === "function") {
+        window.mixpanel.reset();
+      }
+    } catch (e) {}
+
+    console.log("[Telemetry] Sessions reset on logout.");
   };
 
-  // Safe product event tracking with sanitize & bucketing
+  // Unified Product Event Tracking (dispatches to PostHog, Mixpanel, and GA4)
   window.trackProductEvent = function (eventName, properties) {
     const props = Object.assign({}, properties || {});
 
-    // Ensure no sensitive credentials, passwords, or tokens leak
+    // Ensure no sensitive credentials or passwords leak
     delete props.password;
     delete props.token;
     delete props.secret;
     delete props.authorization;
     delete props.csv_content;
 
+    // PostHog Dispatch
     try {
       if (window.posthog && typeof window.posthog.capture === "function") {
         window.posthog.capture(eventName, props);
-        console.log(`[PostHog Event Captured: ${eventName}]`, props);
       }
-    } catch (err) {
-      console.warn(`[Telemetry] Error capturing ${eventName}:`, err);
-    }
+    } catch (err) {}
+
+    // Mixpanel Dispatch
+    try {
+      if (window.mixpanel && typeof window.mixpanel.track === "function") {
+        window.mixpanel.track(eventName, props);
+      }
+    } catch (err) {}
+
+    console.log(`[Telemetry Event Captured: ${eventName}]`, props);
   };
 
   // Helper bucketing functions
@@ -199,9 +276,8 @@
 
   // Trigger init on DOM load or immediately
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initPostHog);
+    document.addEventListener("DOMContentLoaded", initTelemetry);
   } else {
-    initPostHog();
+    initTelemetry();
   }
 })(window, document);
-

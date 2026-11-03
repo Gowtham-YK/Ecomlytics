@@ -388,6 +388,8 @@ def telemetry_config():
         "posthog_token": config.POSTHOG_API_KEY if config.posthog_configured() else "",
         "posthog_host": config.POSTHOG_HOST,
         "posthog_project_id": config.POSTHOG_PROJECT_ID,
+        "mixpanel_enabled": config.mixpanel_configured(),
+        "mixpanel_token": config.MIXPANEL_PROJECT_TOKEN if config.mixpanel_configured() else "",
         "ga4_measurement_id": config.GA4_MEASUREMENT_ID,
     }
 
