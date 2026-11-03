@@ -14,6 +14,7 @@
 <title>Sign in | Ecomlytics</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="favicon.svg">
+<script src="js/telemetry.js"></script>
 <style>
   .auth-tabs {
     display: flex;
@@ -323,6 +324,18 @@ document.getElementById('authForm').addEventListener('submit', async function(e)
       plan: 'free'
     };
     localStorage.setItem('ecomlytics_user', JSON.stringify(userProfile));
+
+    // PostHog Product Telemetry: Identify user & record product events
+    if (typeof window.identifyUser === 'function') {
+      window.identifyUser(userProfile);
+    }
+    if (typeof window.trackProductEvent === 'function') {
+      if (currentMode === 'signup') {
+        window.trackProductEvent('user_signed_up', { signup_method: 'email' });
+      } else {
+        window.trackProductEvent('user_logged_in', { login_method: 'email' });
+      }
+    }
 
     // GA4 Telemetry: Track sign_up and login (No PII)
     if (typeof gtag === 'function') {

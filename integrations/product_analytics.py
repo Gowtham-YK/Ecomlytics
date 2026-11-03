@@ -4,19 +4,15 @@ Supports first-party event capture and optional upstream forwarding to PostHog.
 Operates gracefully in stub mode if external credentials are not configured.
 """
 
-import os
-import json
 import sqlite3
 from typing import Dict, Any, Optional
 import httpx
 from analytics.funnel import record_event
-
-POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY", "")
-POSTHOG_HOST = os.getenv("POSTHOG_HOST", "https://us.i.posthog.com")
+import config
 
 
 def is_posthog_configured() -> bool:
-    return bool(POSTHOG_API_KEY and POSTHOG_API_KEY.strip())
+    return config.posthog_configured()
 
 
 def get_analytics_status() -> Dict[str, Any]:
@@ -24,7 +20,7 @@ def get_analytics_status() -> Dict[str, Any]:
     return {
         "platform": "PostHog",
         "configured": is_posthog_configured(),
-        "host": POSTHOG_HOST if is_posthog_configured() else None,
+        "host": config.POSTHOG_HOST if is_posthog_configured() else None,
         "mode": "live" if is_posthog_configured() else "first_party_only",
         "free_tier_allowance": "1,000,000 events/month"
     }
@@ -56,7 +52,7 @@ def track_product_event(
     if is_posthog_configured():
         try:
             payload = {
-                "api_key": POSTHOG_API_KEY,
+                "api_key": config.POSTHOG_API_KEY,
                 "event": event_name,
                 "distinct_id": user_id or session_id or "anonymous",
                 "properties": {
@@ -67,7 +63,7 @@ def track_product_event(
             }
             # Fire HTTP POST with short timeout
             with httpx.Client(timeout=2.0) as client:
-                client.post(f"{POSTHOG_HOST}/capture/", json=payload)
+                client.post(f"{config.POSTHOG_HOST.rstrip('/')}/capture/", json=payload)
         except Exception:
             # External tracking failure must never break core application flow
             pass

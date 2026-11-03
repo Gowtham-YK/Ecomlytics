@@ -377,8 +377,24 @@ def get_insights(
 
 
 # ============================================================
-# EVENT INGESTION ROUTE
+# EVENT & TELEMETRY CONFIGURATION ROUTES
 # ============================================================
+
+@app.get("/api/telemetry/config")
+def telemetry_config():
+    """Returns safe client-side telemetry configuration for PostHog and GA4."""
+    return {
+        "posthog_enabled": config.posthog_configured(),
+        "posthog_token": config.POSTHOG_API_KEY if config.posthog_configured() else "",
+        "posthog_host": config.POSTHOG_HOST,
+        "posthog_project_id": config.POSTHOG_PROJECT_ID,
+        "ga4_measurement_id": config.GA4_MEASUREMENT_ID,
+    }
+
+
+# ============================================================
+# EVENT INGESTION ROUTE
+# ============================================================ 
 
 @app.post("/api/events")
 def api_track_event(
@@ -450,7 +466,7 @@ async def demo_checkout(request: Request):
         "success": True,
         "mode": "demo",
         "transaction_id": transaction_id,
-        "message": "Demo payment approved. No real money was charged."
+        "message": "Payment successful! Your Pro Pack subscription is now active."
     }
 
 

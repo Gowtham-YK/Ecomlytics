@@ -56,6 +56,9 @@ async function checkAuthSession() {
       plan: "free"
     };
     localStorage.setItem("ecomlytics_user", JSON.stringify(profile));
+    if (typeof window.identifyUser === "function") {
+      window.identifyUser(profile);
+    }
     return profile;
   } catch (err) {
     localStorage.removeItem("ecomlytics_user");
@@ -98,6 +101,12 @@ async function api(path, options = {}) {
 }
 
 async function signOut() {
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("user_logged_out", {});
+  }
+  if (typeof window.resetUser === "function") {
+    window.resetUser();
+  }
   try {
     await fetch(API + "/auth/logout", { method: "POST", credentials: "include" });
   } catch (e) {}
@@ -205,6 +214,9 @@ async function overviewPage() {
   shell("overview");
   await checkAuthSession();
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("dashboard_viewed", { dashboard_section: "overview" });
+  }
 
   try {
     const o = await api("/overview");
@@ -289,6 +301,9 @@ async function salesPage() {
   shell("sales");
   await checkAuthSession();
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("dashboard_viewed", { dashboard_section: "sales" });
+  }
 
   try {
     const [salesData, overviewData] = await Promise.all([api("/sales"), api("/overview")]);
@@ -353,6 +368,9 @@ async function productsPage() {
   shell("products");
   await checkAuthSession();
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("dashboard_viewed", { dashboard_section: "products" });
+  }
 
   try {
     const prods = await api("/products");
@@ -611,6 +629,9 @@ async function customersPage() {
   shell("customers");
   await checkAuthSession();
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("dashboard_viewed", { dashboard_section: "customers" });
+  }
 
   try {
     const segData = await api("/customers/segments");
@@ -690,6 +711,10 @@ async function retentionPage() {
   shell("retention");
   await checkAuthSession();
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("cohort_analysis_viewed", { analysis_type: "customer_cohorts" });
+    window.trackProductEvent("funnel_analysis_viewed", { funnel_type: "purchase_funnel" });
+  }
 
   try {
     const [funnelData, cohortData] = await Promise.all([api("/funnels"), api("/cohorts")]);
@@ -841,9 +866,20 @@ async function insightsPage() {
   await checkAuthSession();
   const content = document.getElementById("content");
 
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("report_generation_started", { report_type: "automated_business_insights" });
+  }
+
   try {
     const data = await api("/insights");
     const insights = data.insights || [];
+    if (typeof window.trackProductEvent === "function") {
+      window.trackProductEvent("report_generated", {
+        report_type: "automated_business_insights",
+        data_source: "csv_store_data",
+        insight_count: insights.length
+      });
+    }
 
     if (!insights.length) {
       content.innerHTML = header("Business Insights", "Algorithmic decision support and automated findings") + `
@@ -867,6 +903,12 @@ async function insightsPage() {
       `).join("")}
     </div>`;
   } catch (err) {
+    if (typeof window.trackProductEvent === "function") {
+      window.trackProductEvent("report_generation_failed", {
+        report_type: "automated_business_insights",
+        error_category: window.sanitizeError ? window.sanitizeError(err.message) : "report_error"
+      });
+    }
     content.innerHTML = `<div class="card"><div class="section-title">Error Loading Insights</div><p class="note">${escapeHtml(err.message)}</p></div>`;
   }
 }
@@ -878,6 +920,9 @@ async function dataSourcesPage() {
   shell("data-sources");
   await checkAuthSession();
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("integration_settings_viewed", {});
+  }
 
   try {
     const [sources, importJobs] = await Promise.all([api("/data-sources"), api("/imports")]);
@@ -994,6 +1039,13 @@ async function handleCsvFileSelected(file) {
   const msgEl = document.getElementById("importResultMsg");
   const datasetType = document.getElementById("csvDatasetType").value;
 
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("csv_upload_started", {
+      file_type: datasetType,
+      file_size_bucket: window.getFileSizeBucket ? window.getFileSizeBucket(file.size) : "unknown"
+    });
+  }
+
   msgEl.style.display = "block";
   msgEl.innerHTML = `<div class="pill info">Reading and importing ${escapeHtml(file.name)}...</div>`;
 
@@ -1011,6 +1063,15 @@ async function handleCsvFileSelected(file) {
       });
 
       const sm = res.import_summary;
+      if (typeof window.trackProductEvent === "function") {
+        window.trackProductEvent("csv_upload_succeeded", {
+          source_type: datasetType,
+          row_count_bucket: window.getRowCountBucket ? window.getRowCountBucket(sm.total_rows) : "unknown",
+          imported_rows: sm.imported_rows,
+          skipped_rows: sm.skipped_rows
+        });
+      }
+
       msgEl.innerHTML = `
       <div class="card" style="background:#f0fdf4;border:1px solid #bbf7d0;padding:14px;margin-top:10px">
         <strong style="color:#15803d">✓ Import Succeeded: ${escapeHtml(sm.status)}</strong>
@@ -1020,6 +1081,12 @@ async function handleCsvFileSelected(file) {
       </div>`;
       setTimeout(() => dataSourcesPage(), 1500);
     } catch (err) {
+      if (typeof window.trackProductEvent === "function") {
+        window.trackProductEvent("csv_upload_failed", {
+          file_type: datasetType,
+          error_category: window.sanitizeError ? window.sanitizeError(err.message) : "upload_error"
+        });
+      }
       msgEl.innerHTML = `<div class="pill danger" style="padding:10px">Import Failed: ${escapeHtml(err.message)}</div>`;
     }
   };
@@ -1034,6 +1101,9 @@ async function subscriptionPage() {
   await checkAuthSession();
   const content = document.getElementById("content");
 
+  const u = getUserSession() || {};
+  const isPro = u.plan === "pro";
+
   content.innerHTML = header("Plans & Billing", "Choose the right decision intelligence tier for your business") + `
   <div class="billing-hero">
     <div>
@@ -1041,7 +1111,7 @@ async function subscriptionPage() {
       <h2>Upgrade Your Decision Intelligence</h2>
       <p>Unlock cohort retention analysis, automated business insights, and external data integration pipelines.</p>
     </div>
-    <div class="billing-status">Current: Free Active</div>
+    <div class="billing-status">Current: ${isPro ? "Pro Pack Active" : "Free Active"}</div>
   </div>
 
   <div class="pricing-grid" style="margin-top:24px">
@@ -1076,12 +1146,21 @@ async function subscriptionPage() {
         <li><span>✓</span> Unlimited CSV imports & idempotency</li>
         <li><span>✓</span> PostHog & Google Analytics integration</li>
       </ul>
-      <button class="btn" onclick="demoCheckout('pro')">Upgrade to Pro Pack</button>
+      ${isPro ? '<button class="btn secondary-btn" disabled>Active Plan</button>' : '<button class="btn" onclick="demoCheckout(\'pro\')">Upgrade to Pro Pack</button>'}
     </div>
   </div>`;
 }
 
 async function demoCheckout(plan) {
+  // PostHog Product Telemetry: Checkout Started
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("checkout_started", {
+      plan: plan,
+      currency: "INR",
+      amount: 49.0
+    });
+  }
+
   // GA4: begin_checkout
   trackGA4("begin_checkout", {
     currency: "INR",
@@ -1101,29 +1180,46 @@ async function demoCheckout(plan) {
       body: JSON.stringify({ plan: plan })
     });
 
-    const txnId = res.transaction_id || ("ORD-" + Date.now());
-    const storageKey = "ga4_purchased_" + txnId;
-    // Prevent duplicate firing on page refresh
+    const txnId = res.transaction_id || ("ECO-" + Date.now());
+    const storageKey = "purchased_" + txnId;
+
     if (!sessionStorage.getItem(storageKey)) {
       sessionStorage.setItem(storageKey, "1");
+
+      // PostHog Product Telemetry: Payment Succeeded
+      if (typeof window.trackProductEvent === "function") {
+        window.trackProductEvent("payment_succeeded", {
+          plan: plan,
+          currency: "INR",
+          amount: 49.0,
+          transaction_id: txnId
+        });
+      }
+
       // GA4: purchase
       trackGA4("purchase", {
         transaction_id: txnId,
         currency: "INR",
-        value: Number(res.amount || 49.0),
+        value: 49.0,
         items: [{
           item_id: "plan_pro_pack",
           item_name: "Pro Pack Subscription",
           item_category: "Platform Subscription",
-          price: Number(res.amount || 49.0),
+          price: 49.0,
           quantity: 1
         }]
       });
     }
 
-    alert(`Success: ${res.message}\nTransaction ID: ${txnId}\n(GA4 begin_checkout & purchase dispatched)`);
+    // Update active plan in session
+    const u = getUserSession() || {};
+    u.plan = "pro";
+    localStorage.setItem("ecomlytics_user", JSON.stringify(u));
+
+    alert(`Payment Successful!\nYour Pro Pack subscription is now active.\nTransaction ID: ${txnId}`);
+    setTimeout(() => subscriptionPage(), 400);
   } catch (err) {
-    alert("Checkout error: " + err.message);
+    alert("Unable to process request: " + err.message);
   }
 }
 
