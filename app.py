@@ -390,6 +390,7 @@ def telemetry_config():
         "posthog_project_id": config.POSTHOG_PROJECT_ID,
         "mixpanel_enabled": config.mixpanel_configured(),
         "mixpanel_token": config.MIXPANEL_PROJECT_TOKEN if config.mixpanel_configured() else "",
+        "mixpanel_host": config.MIXPANEL_HOST,
         "ga4_measurement_id": config.GA4_MEASUREMENT_ID,
     }
 

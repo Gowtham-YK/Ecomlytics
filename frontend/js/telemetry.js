@@ -149,6 +149,7 @@
     if (mpToken) {
       try {
         window.mixpanel.init(mpToken, {
+          api_host: (cfg && cfg.mixpanel_host) || "https://api-eu.mixpanel.com",
           track_pageview: true,
           persistence: "localStorage"
         });

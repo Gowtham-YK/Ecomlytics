@@ -41,11 +41,16 @@ POSTHOG_HOST = (
 )
 POSTHOG_PROJECT_ID = os.environ.get("POSTHOG_PROJECT_ID", "")
 
-# Mixpanel Product Analytics Configuration
+# Mixpanel Product Analytics Configuration (EU / US)
 MIXPANEL_PROJECT_TOKEN = (
     os.environ.get("MIXPANEL_PROJECT_TOKEN")
     or os.environ.get("NEXT_PUBLIC_MIXPANEL_TOKEN")
     or ""
+)
+MIXPANEL_HOST = (
+    os.environ.get("MIXPANEL_HOST")
+    or os.environ.get("NEXT_PUBLIC_MIXPANEL_HOST")
+    or "https://api-eu.mixpanel.com"
 )
 
 
