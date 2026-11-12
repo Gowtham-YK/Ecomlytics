@@ -371,8 +371,3 @@ Ecomlytics is deployed on **Render** as a Python Web Service.
 
 Developed as an e-commerce intelligence and product analytics platform.  
 Copyright © 2026 Ecomlytics. All rights reserved.
-
-
-## Product analytics integrations
-
-Mixpanel, PostHog and Amplitude server-side event forwarding is available. Configure provider credentials as described in [docs/product-analytics-integrations.md](docs/product-analytics-integrations.md).

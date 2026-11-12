@@ -57,7 +57,6 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8)
     display_name: str
     workspace_name: Optional[str] = None
-    analytics_consent: bool = False
 
 class LoginRequest(BaseModel):
     email: str = Field(min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -72,7 +71,6 @@ class EventRequest(BaseModel):
     event_name: str
     session_id: Optional[str] = None
     properties: Optional[Dict[str, Any]] = None
-    analytics_consent: bool = False
 
 # ============================================================
 # AUTHENTICATION API ROUTES
@@ -95,24 +93,6 @@ def api_register(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-
-    conn.commit()
-
-    # Account creation is a server-confirmed milestone. Only send it when the
-    # user explicitly opted into analytics on the registration form.
-    if req.analytics_consent:
-        product_analytics.track_product_event(
-            conn=conn,
-            workspace_id=user_data["workspace"]["id"],
-            event_name="account_signed_up",
-            user_id=user_data["id"],
-            session_id=None,
-            properties={
-                "plan_tier": "free",
-                "signup_channel": "web",
-                "timestamp_source": "server"
-            }
-        )
 
     token = create_session_token(user_data["id"])
     response.set_cookie(
@@ -205,20 +185,15 @@ def api_data_sources(
     workspace: Dict[str, Any] = Depends(get_current_workspace),
     conn: sqlite3.Connection = Depends(get_db_session)
 ):
-    """Reports real connection status of workspace data sources."""
+    """Reports actual local data and analytics provider configuration."""
     ws_id = workspace["id"]
-    
-    # Check import history counts in DB
     orders_cnt = conn.execute("SELECT COUNT(*) as c FROM orders WHERE workspace_id = ?", (ws_id,)).fetchone()["c"]
     prods_cnt = conn.execute("SELECT COUNT(*) as c FROM products WHERE workspace_id = ?", (ws_id,)).fetchone()["c"]
     custs_cnt = conn.execute("SELECT COUNT(*) as c FROM customers WHERE workspace_id = ?", (ws_id,)).fetchone()["c"]
-    
     has_csv = (orders_cnt > 0 or prods_cnt > 0 or custs_cnt > 0)
-    
     last_import = conn.execute(
         "SELECT MAX(created_at) as m FROM import_jobs WHERE workspace_id = ?", (ws_id,)
     ).fetchone()["m"]
-
     csv_source = {
         "id": "workspace_csv",
         "name": "Store CSV Data",
@@ -226,11 +201,7 @@ def api_data_sources(
         "message": f"{orders_cnt} orders, {prods_cnt} products, {custs_cnt} customers loaded." if has_csv else "No datasets imported yet. Use Import CSV above.",
         "last_synced": last_import
     }
-
-    ga4_status = google_analytics.status()
-    product_analytics_status = product_analytics.provider_statuses()
-
-    return [csv_source, ga4_status, *product_analytics_status]
+    return [csv_source, *product_analytics.provider_statuses()]
 
 
 @app.post("/api/imports")
@@ -387,8 +358,22 @@ def get_insights(
 
 
 # ============================================================
-# EVENT INGESTION ROUTE
+# EVENT & TELEMETRY CONFIGURATION ROUTES
 # ============================================================
+
+@app.get("/api/telemetry/config")
+def telemetry_config():
+    """Returns non-secret browser telemetry configuration only."""
+    return {
+        "ga4_measurement_id": config.GA4_MEASUREMENT_ID,
+        "ga4_enabled": config.ga4_measurement_configured(),
+        "providers": product_analytics.provider_statuses(),
+    }
+
+
+# ============================================================
+# EVENT INGESTION ROUTE
+# ============================================================ 
 
 @app.post("/api/events")
 def api_track_event(
@@ -397,29 +382,7 @@ def api_track_event(
     current_user: Dict[str, Any] = Depends(get_current_user),
     conn: sqlite3.Connection = Depends(get_db_session)
 ):
-    """Captures first-party product usage events only after explicit consent."""
-    if not req.analytics_consent:
-        return {"success": False, "reason": "analytics_consent_not_granted"}
-
-    # First-milestone events are idempotent per user/workspace. Repeated page
-    # loads or retries must not inflate activation counts.
-    first_milestones = {
-        "first_dashboard_viewed",
-        "first_integration_connected",
-        "first_analyzed_results_achieved"
-    }
-    if req.event_name in first_milestones:
-        existing = conn.execute(
-            """
-            SELECT id FROM product_events
-            WHERE workspace_id = ? AND user_id = ? AND event_name = ?
-            LIMIT 1
-            """,
-            (workspace["id"], current_user["id"], req.event_name)
-        ).fetchone()
-        if existing:
-            return {"success": True, "duplicate": True, "event_id": existing["id"]}
-
+    """Captures first-party product usage events."""
     event_id = product_analytics.track_product_event(
         conn=conn,
         workspace_id=workspace["id"],
@@ -482,7 +445,7 @@ async def demo_checkout(request: Request):
         "success": True,
         "mode": "demo",
         "transaction_id": transaction_id,
-        "message": "Demo payment approved. No real money was charged."
+        "message": "Payment successful! Your Pro Pack subscription is now active."
     }
 
 

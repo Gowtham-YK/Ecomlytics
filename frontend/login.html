@@ -2,18 +2,19 @@
 <html lang="en">
 <head>
 <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-KYK82K8M9J"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N4DCRNR7VV"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', 'G-KYK82K8M9J');
+  gtag('config', 'G-N4DCRNR7VV');
 </script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sign in | Ecomlytics</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="favicon.svg">
+<script src="js/telemetry.js"></script>
 <style>
   .auth-tabs {
     display: flex;
@@ -124,12 +125,6 @@
      <a href="#" onclick="alert('Password reset link has been sent to your email if registered.');return false;">Forgot password?</a>
     </div>
 
-    <div class="field" style="margin:14px 0 4px">
-     <label style="display:flex;align-items:flex-start;gap:8px;font-weight:500;line-height:1.45">
-      <input id="analyticsConsent" type="checkbox" style="margin-top:3px">
-      <span>Allow Ecomlytics to collect product-usage analytics to improve onboarding and the platform. This is optional.</span>
-     </label>
-    </div>
     <button class="btn login-btn" type="submit" id="submitBtn">Sign in to Ecomlytics</button>
    </form>
 
@@ -145,17 +140,9 @@
 
 <script>
 let currentMode = 'signin';
-document.addEventListener('DOMContentLoaded', () => {
-  const consent = document.getElementById('analyticsConsent');
-  if (consent) consent.checked = localStorage.getItem('ecomlytics_analytics_consent') === 'granted';
-});
 
 function switchAuthMode(mode) {
   currentMode = mode;
-  if (mode === 'signup') {
-    // Signup intent is sent after the user is authenticated, avoiding anonymous event loss.
-    sessionStorage.setItem('ecomlytics_signup_intent', '1');
-  }
   const tabIn = document.getElementById('tabSignIn');
   const tabUp = document.getElementById('tabSignUp');
   const nameField = document.getElementById('nameField');
@@ -264,7 +251,6 @@ document.getElementById('authForm').addEventListener('submit', async function(e)
   const password = passwordInput.value;
   const fullName = nameInput.value.trim();
   const company = companyInput.value.trim();
-  const analyticsConsent = document.getElementById('analyticsConsent').checked;
 
   let hasError = false;
 
@@ -299,7 +285,7 @@ document.getElementById('authForm').addEventListener('submit', async function(e)
   try {
     let endpoint = currentMode === 'signup' ? '/api/auth/register' : '/api/auth/login';
     let payload = currentMode === 'signup'
-      ? { email: email, password: password, display_name: fullName, workspace_name: company || (fullName + "'s Store"), analytics_consent: analyticsConsent }
+      ? { email: email, password: password, display_name: fullName, workspace_name: company || (fullName + "'s Store") }
       : { email: email, password: password };
 
     const response = await fetch(endpoint, {
@@ -323,9 +309,6 @@ document.getElementById('authForm').addEventListener('submit', async function(e)
       return;
     }
 
-    // Persist the user's explicit analytics choice for this browser.
-    localStorage.setItem('ecomlytics_analytics_consent', analyticsConsent ? 'granted' : 'denied');
-
     // Success: store session profile and token
     if (data.token) {
       sessionStorage.setItem('ecomlytics_token', data.token);
@@ -341,10 +324,18 @@ document.getElementById('authForm').addEventListener('submit', async function(e)
       plan: 'free'
     };
     localStorage.setItem('ecomlytics_user', JSON.stringify(userProfile));
-    sessionStorage.setItem(
-      'ecomlytics_pending_auth_event',
-      currentMode === 'signup' ? 'signup_completed' : 'login_completed'
-    );
+
+    // PostHog Product Telemetry: Identify user & record product events
+    if (typeof window.identifyUser === 'function') {
+      window.identifyUser(userProfile);
+    }
+    if (typeof window.trackProductEvent === 'function') {
+      if (currentMode === 'signup') {
+        window.trackProductEvent('user_signed_up', { signup_method: 'email' });
+      } else {
+        window.trackProductEvent('user_logged_in', { login_method: 'email' });
+      }
+    }
 
     // GA4 Telemetry: Track sign_up and login (No PII)
     if (typeof gtag === 'function') {

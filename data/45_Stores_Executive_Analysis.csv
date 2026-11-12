@@ -1,0 +1,46 @@
+rank_by_revenue,business_name,industry_category,orders_count,customers_count,products_count,total_revenue_inr,aov_inr,return_rate_pct
+1,Auric Clay Ceramics,Home & Decor,37,13,6,31670.00,931.47,8.1%
+2,The Linen Loom,Fashion & Apparel,28,18,6,29307.00,1085.44,3.6%
+3,Kintsugi Home Decor,Home & Decor,42,14,5,29100.00,746.15,2.5%
+4,Copper & Slate Designs,Modern Decor,28,15,5,28538.00,1141.52,3.8%
+5,Heritage Brassware,Home & Spiritual,41,16,5,27880.00,714.87,2.5%
+6,Little Sprout Toys,Kids & Toys,43,19,5,26303.00,641.54,4.7%
+7,CopperVeda Crafts,Wellness & Living,30,18,5,26038.00,964.37,10.0%
+8,Trailblazer Outdoor Gear,Sports & Outdoors,38,19,5,25144.00,661.68,0.0%
+9,Urban Botanist Studios,Craft & Plants,42,13,5,25101.00,697.25,10.0%
+10,Minimalist Woodworks,Home & Kitchen,41,21,5,24162.00,671.17,5.3%
+11,Matcha Leaf Co.,Gourmet Tea,34,16,5,23772.00,742.88,5.9%
+12,Nectar & Hive Apiaries,Gourmet Grocery,39,12,5,23619.00,674.83,2.8%
+13,PureForm Skincare,Clean Beauty,32,24,5,23079.00,744.48,3.1%
+14,Earthy Threads Home,Kitchen Linen,41,20,5,23008.00,621.84,9.8%
+15,BrewCraft Roasters,Food & Beverage,30,24,6,22807.00,844.70,10.0%
+16,ZenKnot Macrame,Home & Decor,38,21,5,22399.00,622.19,2.7%
+17,Urban Herbarium,Gardening & Lifestyle,42,17,5,22222.00,617.28,12.2%
+18,The Green Wick Co.,Home Fragrance,41,23,5,21464.00,580.11,5.1%
+19,Canvas & Thread Tees,Apparel & Merch,25,14,5,20578.00,857.42,4.0%
+20,Silk & Dye Studio,Textiles & Scarves,35,15,5,20382.00,617.64,2.9%
+21,Thread & Needle Studio,Fashion & Lifestyle,31,22,5,19911.00,686.59,3.3%
+22,SunDipped Dry Fruits,Gourmet Snacks,44,17,5,19275.00,438.07,0.0%
+23,Nomad Leatherworks,Travel Accessories,34,23,5,19003.00,593.84,3.0%
+24,Bamboo Basics EcoStore,Eco-Friendly Living,40,15,5,18504.00,544.24,12.8%
+25,SoleCraft Leather,Accessories,25,18,5,17834.00,849.24,8.7%
+26,Aura Mist Aromatics,Home Fragrance,39,12,5,17820.00,524.12,5.6%
+27,Bloom & Leaf Organics,Health & Wellness,37,23,6,17681.00,535.79,8.3%
+28,Velvet & Wool Knits,Winterwear & Apparel,27,18,5,16969.00,737.78,11.5%
+29,Petal & Press Studio,Stationery & Art,27,16,5,16371.00,606.33,0.0%
+30,The Indigo Studio,Home Textiles,23,17,5,16243.00,738.32,4.3%
+31,Knotty Pine Crafts,Desk & Workspace,30,14,5,16165.00,673.54,7.7%
+32,ClayPaws Pet Care,Pet Supplies,41,14,5,15177.00,399.39,5.0%
+33,Wildflower Apothecary,Bath & Spa,37,24,5,14707.00,459.59,5.9%
+34,PureBite Confections,Gourmet Grocery,33,19,5,14149.00,456.42,3.1%
+35,The Herbal Sips,Wellness Teas,40,18,5,13732.00,381.44,7.7%
+36,SpiceRoute Origins,Gourmet Grocery,39,14,6,13357.00,381.63,10.3%
+37,Terra Glow Botanicals,Beauty & Skincare,23,12,6,12767.00,555.09,0.0%
+38,The Rustic Baker Pantry,Artisanal Bakery,37,24,5,11296.00,353.00,13.5%
+39,Studio Kora Ceramics,Planters & Pots,27,22,5,10850.00,471.74,14.8%
+40,PaperCrafter Studio,Eco-Stationery,26,15,5,10475.00,419.00,3.8%
+41,The Chai Box Blends,Gourmet Beverages,28,12,5,10416.00,416.64,10.7%
+42,BeanToBar Kokoa,Chocolaterie,29,21,5,9988.00,399.52,10.7%
+43,Wholesome Paws Bakery,Pet Treats,33,12,5,9824.00,316.90,0.0%
+44,NutriCrunch Granola,Health Food,22,18,5,7899.00,376.14,4.5%
+45,The Cold Pressed Bar,Bath & Body,30,18,5,6190.00,221.07,0.0%

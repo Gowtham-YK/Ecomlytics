@@ -46,6 +46,7 @@ async function checkAuthSession() {
     const workspaces = user.workspaces || [];
     const activeWs = workspaces.find(w => w.id === currentStored.workspace_id) || workspaces[0] || { id: "ws_default", name: "My Store" };
     
+    const persistedPlan = localStorage.getItem("ecomlytics_plan") || currentStored.plan || user.plan || "free";
     const profile = {
       id: user.id,
       name: user.display_name,
@@ -53,27 +54,11 @@ async function checkAuthSession() {
       workspace_id: activeWs.id,
       company: activeWs.name,
       workspaces: workspaces,
-      plan: "free"
+      plan: persistedPlan
     };
     localStorage.setItem("ecomlytics_user", JSON.stringify(profile));
-    ensureAnalyticsConsentBanner();
-
-    const pendingAuthEvent = sessionStorage.getItem("ecomlytics_pending_auth_event");
-    if (pendingAuthEvent) {
-      sessionStorage.removeItem("ecomlytics_pending_auth_event");
-      trackProductEvent(pendingAuthEvent, { page_name: "authentication" });
-    }
-    if (!window.__ecomlyticsPageViewTracked) {
-      window.__ecomlyticsPageViewTracked = true;
-      const pageName = document.body.dataset.page || "application";
-      trackProductEvent("page_viewed", { page_name: pageName });
-      if (pageName === "overview") {
-        trackProductEvent("dashboard_viewed", { page_name: pageName });
-        trackProductEvent("first_dashboard_viewed", {
-          dashboard_name: "overview",
-          data_freshness_state: "loaded"
-        });
-      }
+    if (typeof window.identifyUser === "function") {
+      window.identifyUser(profile);
     }
     return profile;
   } catch (err) {
@@ -116,71 +101,13 @@ async function api(path, options = {}) {
   return r.json();
 }
 
-function getAnalyticsSessionId() {
-  let id = sessionStorage.getItem("ecomlytics_analytics_session");
-  if (!id) {
-    id = (window.crypto && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : "sess_" + Date.now() + "_" + Math.random().toString(36).slice(2);
-    sessionStorage.setItem("ecomlytics_analytics_session", id);
-  }
-  return id;
-}
-
-// Sends product usage events to Ecomlytics' first-party event store. The
-// FastAPI adapter forwards allowlisted, non-sensitive properties to any
-// configured PostHog project.
-function hasAnalyticsConsent() {
-  return localStorage.getItem("ecomlytics_analytics_consent") === "granted";
-}
-
-function ensureAnalyticsConsentBanner() {
-  if (hasAnalyticsConsent() || localStorage.getItem("ecomlytics_analytics_consent") === "denied") return;
-  if (document.getElementById("ecomlytics-consent-banner")) return;
-  const banner = document.createElement("div");
-  banner.id = "ecomlytics-consent-banner";
-  banner.style.cssText = "position:fixed;z-index:9999;left:16px;right:16px;bottom:16px;max-width:760px;margin:auto;background:#fff;border:1px solid #dbe3ee;border-radius:12px;box-shadow:0 8px 30px rgba(15,23,42,.16);padding:16px;display:flex;gap:14px;align-items:center;justify-content:space-between;font:13px/1.5 Arial,sans-serif;color:#334155";
-  banner.innerHTML = '<span>May Ecomlytics collect product-usage analytics to improve onboarding and the platform? You can change this choice by clearing your site preference.</span><span style="display:flex;gap:8px;flex-shrink:0"><button id="ecomlytics-consent-no" type="button" style="padding:8px 12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;cursor:pointer">Decline</button><button id="ecomlytics-consent-yes" type="button" style="padding:8px 12px;border:0;border-radius:7px;background:#2563eb;color:#fff;cursor:pointer">Allow</button></span>';
-  document.body.appendChild(banner);
-  document.getElementById("ecomlytics-consent-yes").addEventListener("click", () => {
-    localStorage.setItem("ecomlytics_analytics_consent", "granted");
-    banner.remove();
-  });
-  document.getElementById("ecomlytics-consent-no").addEventListener("click", () => {
-    localStorage.setItem("ecomlytics_analytics_consent", "denied");
-    banner.remove();
-  });
-}
-
-async function trackProductEvent(eventName, properties = {}) {
-  try {
-    const token = sessionStorage.getItem("ecomlytics_token");
-    const user = getUserSession();
-    if (!token || !user || !hasAnalyticsConsent()) return;
-    const headers = { "Content-Type": "application/json", "Authorization": "Bearer " + token };
-    if (user.workspace_id) headers["X-Workspace-ID"] = user.workspace_id;
-    const response = await fetch(API + "/events", {
-      method: "POST", credentials: "include", headers,
-      body: JSON.stringify({
-        event_name: eventName,
-        session_id: getAnalyticsSessionId(),
-        properties: {
-          ...properties, page_path: window.location.pathname,
-          environment: window.location.hostname === "localhost" ? "development" : "production",
-          platform: "web"
-        },
-        analytics_consent: true
-      })
-    });
-    if (!response.ok) console.warn("Product analytics event was not accepted:", eventName);
-  } catch (err) {
-    // Analytics must never interrupt normal application behaviour.
-    console.debug("Product analytics unavailable:", err);
-  }
-}
-
 async function signOut() {
-  await trackProductEvent("logout_completed");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("user_logged_out", {});
+  }
+  if (typeof window.resetUser === "function") {
+    window.resetUser();
+  }
   try {
     await fetch(API + "/auth/logout", { method: "POST", credentials: "include" });
   } catch (e) {}
@@ -288,6 +215,9 @@ async function overviewPage() {
   shell("overview");
   await checkAuthSession();
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("dashboard_viewed", { dashboard_section: "overview" });
+  }
 
   try {
     const o = await api("/overview");
@@ -372,6 +302,9 @@ async function salesPage() {
   shell("sales");
   await checkAuthSession();
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("dashboard_viewed", { dashboard_section: "sales" });
+  }
 
   try {
     const [salesData, overviewData] = await Promise.all([api("/sales"), api("/overview")]);
@@ -436,6 +369,9 @@ async function productsPage() {
   shell("products");
   await checkAuthSession();
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("dashboard_viewed", { dashboard_section: "products" });
+  }
 
   try {
     const prods = await api("/products");
@@ -542,12 +478,7 @@ function handleProductRowClick(pid) {
   const p = (window._currentProductsMap || {})[pid];
   if (!p) return;
 
-  // Product analytics + GA4: product view.
-  trackProductEvent("product_view", {
-    product_id: String(p.external_id || p.id),
-    product_category: String(p.category || "General"),
-    item_price: Number(p.price || 0), quantity: 1
-  });
+  // GA4: view_item
   trackGA4("view_item", {
     currency: "INR",
     value: Number(p.price || 0),
@@ -618,11 +549,6 @@ function handleProdAddToCart(pid) {
   const p = (window._currentProductsMap || {})[pid];
   if (!p) return;
 
-  trackProductEvent("add_to_cart", {
-    product_id: String(p.external_id || p.id),
-    product_category: String(p.category || "General"),
-    item_price: Number(p.price || 0), quantity: 1
-  });
   // GA4: add_to_cart
   trackGA4("add_to_cart", {
     currency: "INR",
@@ -647,11 +573,6 @@ function handleProdBeginCheckout(pid) {
   const p = (window._currentProductsMap || {})[pid];
   if (!p) return;
 
-  trackProductEvent("checkout_started", {
-    product_id: String(p.external_id || p.id),
-    product_category: String(p.category || "General"),
-    item_price: Number(p.price || 0), quantity: 1, is_demo: true
-  });
   // GA4: begin_checkout
   trackGA4("begin_checkout", {
     currency: "INR",
@@ -676,11 +597,6 @@ function handleProdPurchase(pid) {
   const p = (window._currentProductsMap || {})[pid];
   if (!p) return;
 
-  trackProductEvent("purchase_completed", {
-    product_id: String(p.external_id || p.id),
-    product_category: String(p.category || "General"),
-    item_price: Number(p.price || 0), quantity: 1, is_demo: true, success: true
-  });
   const txnId = "TXN-" + Date.now().toString(36).toUpperCase() + "-" + Math.floor(100 + Math.random() * 900);
   const storageKey = "ga4_purchased_" + txnId;
 
@@ -714,6 +630,9 @@ async function customersPage() {
   shell("customers");
   await checkAuthSession();
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("dashboard_viewed", { dashboard_section: "customers" });
+  }
 
   try {
     const segData = await api("/customers/segments");
@@ -792,9 +711,11 @@ async function customersPage() {
 async function retentionPage() {
   shell("retention");
   await checkAuthSession();
-  trackProductEvent("funnel_viewed");
-  trackProductEvent("cohort_report_viewed");
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("cohort_analysis_viewed", { analysis_type: "customer_cohorts" });
+    window.trackProductEvent("funnel_analysis_viewed", { funnel_type: "purchase_funnel" });
+  }
 
   try {
     const [funnelData, cohortData] = await Promise.all([api("/funnels"), api("/cohorts")]);
@@ -944,16 +865,20 @@ async function seedSampleFunnelEvents() {
 async function insightsPage() {
   shell("insights");
   await checkAuthSession();
-  trackProductEvent("insights_page_viewed");
   const content = document.getElementById("content");
+
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("report_generation_started", { report_type: "automated_business_insights" });
+  }
 
   try {
     const data = await api("/insights");
     const insights = data.insights || [];
-    if (data.status === "available" && insights.length > 0) {
-      trackProductEvent("first_analyzed_results_achieved", {
-        analysis_type: "business_insights",
-        data_ready_mode: "workspace_data"
+    if (typeof window.trackProductEvent === "function") {
+      window.trackProductEvent("report_generated", {
+        report_type: "automated_business_insights",
+        data_source: "csv_store_data",
+        insight_count: insights.length
       });
     }
 
@@ -979,6 +904,12 @@ async function insightsPage() {
       `).join("")}
     </div>`;
   } catch (err) {
+    if (typeof window.trackProductEvent === "function") {
+      window.trackProductEvent("report_generation_failed", {
+        report_type: "automated_business_insights",
+        error_category: window.sanitizeError ? window.sanitizeError(err.message) : "report_error"
+      });
+    }
     content.innerHTML = `<div class="card"><div class="section-title">Error Loading Insights</div><p class="note">${escapeHtml(err.message)}</p></div>`;
   }
 }
@@ -989,8 +920,10 @@ async function insightsPage() {
 async function dataSourcesPage() {
   shell("data-sources");
   await checkAuthSession();
-  trackProductEvent("data_sources_viewed");
   const content = document.getElementById("content");
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("integration_settings_viewed", {});
+  }
 
   try {
     const [sources, importJobs] = await Promise.all([api("/data-sources"), api("/imports")]);
@@ -1107,9 +1040,15 @@ async function handleCsvFileSelected(file) {
   const msgEl = document.getElementById("importResultMsg");
   const datasetType = document.getElementById("csvDatasetType").value;
 
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("csv_upload_started", {
+      file_type: datasetType,
+      file_size_bucket: window.getFileSizeBucket ? window.getFileSizeBucket(file.size) : "unknown"
+    });
+  }
+
   msgEl.style.display = "block";
   msgEl.innerHTML = `<div class="pill info">Reading and importing ${escapeHtml(file.name)}...</div>`;
-  trackProductEvent("csv_import_started", { dataset_type: datasetType });
 
   const reader = new FileReader();
   reader.onload = async function(e) {
@@ -1125,16 +1064,15 @@ async function handleCsvFileSelected(file) {
       });
 
       const sm = res.import_summary;
-      trackProductEvent("csv_import_completed", {
-        dataset_type: datasetType, imported_rows: sm.imported_rows,
-        skipped_rows: sm.skipped_rows, rejected_rows: sm.rejected_rows, success: true
-      });
-      trackProductEvent("setup_step_completed", {
-        setup_step_name: "first_csv_import",
-        integration_name: "csv_import",
-        step_success: true,
-        step_order_number: 1
-      });
+      if (typeof window.trackProductEvent === "function") {
+        window.trackProductEvent("csv_upload_succeeded", {
+          source_type: datasetType,
+          row_count_bucket: window.getRowCountBucket ? window.getRowCountBucket(sm.total_rows) : "unknown",
+          imported_rows: sm.imported_rows,
+          skipped_rows: sm.skipped_rows
+        });
+      }
+
       msgEl.innerHTML = `
       <div class="card" style="background:#f0fdf4;border:1px solid #bbf7d0;padding:14px;margin-top:10px">
         <strong style="color:#15803d">✓ Import Succeeded: ${escapeHtml(sm.status)}</strong>
@@ -1144,7 +1082,12 @@ async function handleCsvFileSelected(file) {
       </div>`;
       setTimeout(() => dataSourcesPage(), 1500);
     } catch (err) {
-      trackProductEvent("csv_import_failed", { dataset_type: datasetType, success: false });
+      if (typeof window.trackProductEvent === "function") {
+        window.trackProductEvent("csv_upload_failed", {
+          file_type: datasetType,
+          error_category: window.sanitizeError ? window.sanitizeError(err.message) : "upload_error"
+        });
+      }
       msgEl.innerHTML = `<div class="pill danger" style="padding:10px">Import Failed: ${escapeHtml(err.message)}</div>`;
     }
   };
@@ -1157,8 +1100,10 @@ async function handleCsvFileSelected(file) {
 async function subscriptionPage() {
   shell("subscription");
   await checkAuthSession();
-  trackProductEvent("subscription_page_viewed");
   const content = document.getElementById("content");
+
+  const u = getUserSession() || {};
+  const isPro = (u.plan === "pro" || localStorage.getItem("ecomlytics_plan") === "pro");
 
   content.innerHTML = header("Plans & Billing", "Choose the right decision intelligence tier for your business") + `
   <div class="billing-hero">
@@ -1167,11 +1112,13 @@ async function subscriptionPage() {
       <h2>Upgrade Your Decision Intelligence</h2>
       <p>Unlock cohort retention analysis, automated business insights, and external data integration pipelines.</p>
     </div>
-    <div class="billing-status">Current: Free Active</div>
+    <div id="billingHeroStatus" class="billing-status ${isPro ? "pro-active" : ""}">
+      ${isPro ? "Current: Pro Pack Active ✓" : "Current: Free Active"}
+    </div>
   </div>
 
   <div class="pricing-grid" style="margin-top:24px">
-    <div class="pricing-card current">
+    <div id="cardFreeTier" class="pricing-card ${isPro ? "" : "current"}">
       <div class="pricing-top">
         <div class="plan-name">Free Tier</div>
         <p>Essential sales & product analytics for emerging stores.</p>
@@ -1184,11 +1131,11 @@ async function subscriptionPage() {
         <li><span>✓</span> Customer segmentation</li>
         <li><span>✓</span> Event-driven purchase funnel</li>
       </ul>
-      <button class="btn secondary-btn" disabled>Current Active Plan</button>
+      <button class="btn secondary-btn" disabled>${isPro ? "Included in Pro" : "Current Active Plan"}</button>
     </div>
 
-    <div class="pricing-card featured">
-      <div class="featured-label">RECOMMENDED</div>
+    <div id="cardProPack" class="pricing-card featured ${isPro ? "current" : ""}">
+      <div class="featured-label">${isPro ? "ACTIVE PLAN" : "RECOMMENDED"}</div>
       <div class="pricing-top">
         <div class="plan-name">Pro Pack</div>
         <p>Complete multi-period cohort retention and automated insight intelligence.</p>
@@ -1202,15 +1149,21 @@ async function subscriptionPage() {
         <li><span>✓</span> Unlimited CSV imports & idempotency</li>
         <li><span>✓</span> PostHog & Google Analytics integration</li>
       </ul>
-      <button class="btn" onclick="demoCheckout('pro')">Upgrade to Pro Pack</button>
+      ${isPro ? '<button class="btn secondary-btn" disabled style="background:#22c55e;border:none;color:#ffffff;font-weight:700;cursor:default;">Active Plan ✓</button>' : '<button id="btnUpgradePro" class="btn" onclick="demoCheckout(\'pro\')">Upgrade to Pro Pack</button>'}
     </div>
   </div>`;
 }
 
 async function demoCheckout(plan) {
-  trackProductEvent("upgrade_clicked", { current_plan: "free", target_plan: plan });
-  trackProductEvent("plan_selected", { plan_name: plan, billing_cycle: "monthly" });
-  trackProductEvent("demo_payment_started", { plan_name: plan, amount: 49, currency: "INR", is_demo: true });
+  // PostHog Product Telemetry: Checkout Started
+  if (typeof window.trackProductEvent === "function") {
+    window.trackProductEvent("checkout_started", {
+      plan: plan,
+      currency: "INR",
+      amount: 49.0
+    });
+  }
+
   // GA4: begin_checkout
   trackGA4("begin_checkout", {
     currency: "INR",
@@ -1230,31 +1183,72 @@ async function demoCheckout(plan) {
       body: JSON.stringify({ plan: plan })
     });
 
-    const txnId = res.transaction_id || ("ORD-" + Date.now());
-    const storageKey = "ga4_purchased_" + txnId;
-    // Prevent duplicate firing on page refresh
+    const txnId = res.transaction_id || ("ECO-" + Date.now());
+    const storageKey = "purchased_" + txnId;
+
     if (!sessionStorage.getItem(storageKey)) {
       sessionStorage.setItem(storageKey, "1");
+
+      // PostHog Product Telemetry: Payment Succeeded
+      if (typeof window.trackProductEvent === "function") {
+        window.trackProductEvent("payment_succeeded", {
+          plan: plan,
+          currency: "INR",
+          amount: 49.0,
+          transaction_id: txnId
+        });
+      }
+
       // GA4: purchase
       trackGA4("purchase", {
         transaction_id: txnId,
         currency: "INR",
-        value: Number(res.amount || 49.0),
+        value: 49.0,
         items: [{
           item_id: "plan_pro_pack",
           item_name: "Pro Pack Subscription",
           item_category: "Platform Subscription",
-          price: Number(res.amount || 49.0),
+          price: 49.0,
           quantity: 1
         }]
       });
     }
 
-    trackProductEvent("demo_payment_completed", { plan_name: plan, amount: Number(res.amount || 49), currency: "INR", is_demo: true, success: true });
-    alert(`Success: ${res.message}\nTransaction ID: ${txnId}\n(GA4 begin_checkout & purchase dispatched)`);
+    // Update and persist active plan in session & localStorage
+    localStorage.setItem("ecomlytics_plan", "pro");
+    const u = getUserSession() || {};
+    u.plan = "pro";
+    localStorage.setItem("ecomlytics_user", JSON.stringify(u));
+
+    // Immediate dynamic DOM update for seamless visual transition
+    const badge = document.getElementById("billingHeroStatus") || document.querySelector(".billing-status");
+    if (badge) {
+      badge.textContent = "Current: Pro Pack Active ✓";
+      badge.className = "billing-status pro-active";
+    }
+
+    const freeCard = document.getElementById("cardFreeTier");
+    if (freeCard) {
+      freeCard.classList.remove("current");
+      const freeBtn = freeCard.querySelector("button");
+      if (freeBtn) freeBtn.textContent = "Included in Pro";
+    }
+
+    const proCard = document.getElementById("cardProPack");
+    if (proCard) {
+      proCard.classList.add("current");
+      const label = proCard.querySelector(".featured-label");
+      if (label) label.textContent = "ACTIVE PLAN";
+      const proBtn = proCard.querySelector("button");
+      if (proBtn) {
+        proBtn.outerHTML = '<button class="btn secondary-btn" disabled style="background:#22c55e;border:none;color:#ffffff;font-weight:700;cursor:default;">Active Plan ✓</button>';
+      }
+    }
+
+    alert(`Payment Successful!\nYour Pro Pack subscription is now active.\nTransaction ID: ${txnId}`);
+    subscriptionPage();
   } catch (err) {
-    trackProductEvent("demo_payment_failed", { plan_name: plan, is_demo: true, success: false });
-    alert("Checkout error: " + err.message);
+    alert("Unable to process request: " + err.message);
   }
 }
 
